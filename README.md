@@ -8,7 +8,7 @@ This repository currently captures the early domain model and design documentati
 
 ## Getting started
 
-The project uses Node.js and TypeScript. To install dependencies, run:
+The project uses Node.js 22 and TypeScript. To install dependencies, run:
 
 ```bash
 npm install
@@ -43,7 +43,7 @@ npm run test:coverage
 ## Contributing
 
 1. Fork the repository and create a feature branch.
-2. Install dependencies with `npm install`.
+2. Install dependencies with `npm install` (a `.nvmrc` file is included for easy Node.js 22 selection).
 3. Implement your changes, adding or updating documentation as needed.
 4. Run `npx tsc --noEmit` and `npm test -- --run` to ensure the TypeScript domain types and automated tests pass.
 5. Submit a pull request describing your changes and referencing any relevant design docs.

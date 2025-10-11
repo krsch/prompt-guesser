@@ -21,6 +21,9 @@
     "url": "https://github.com/krsch/prompt-guesser/issues"
   },
   "homepage": "https://github.com/krsch/prompt-guesser#readme",
+  "engines": {
+    "node": "^22.0.0"
+  },
   "devDependencies": {
     "@types/node": "^24.7.2",
     "@vitest/coverage-v8": "^3.2.4",

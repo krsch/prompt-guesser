@@ -20,14 +20,32 @@ TypeScript definition work can be compiled or type-checked with:
 npx tsc --noEmit
 ```
 
-(There are currently no automated tests or runtime scripts.)
+### Running tests
+
+Automated tests are powered by [Vitest](https://vitest.dev/). Run the suite locally with:
+
+```bash
+npm test -- --run
+```
+
+For watch mode during development:
+
+```bash
+npm run test:watch
+```
+
+To generate a coverage report (text output plus HTML in `coverage/`):
+
+```bash
+npm run test:coverage
+```
 
 ## Contributing
 
 1. Fork the repository and create a feature branch.
 2. Install dependencies with `npm install`.
 3. Implement your changes, adding or updating documentation as needed.
-4. Run `npx tsc --noEmit` to ensure the TypeScript domain types remain valid.
+4. Run `npx tsc --noEmit` and `npm test -- --run` to ensure the TypeScript domain types and automated tests pass.
 5. Submit a pull request describing your changes and referencing any relevant design docs.
 
 For more background on the game rules, UX goals, and planned architecture, explore the files in [`docs/`](docs/).

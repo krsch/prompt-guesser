@@ -1,13 +1,17 @@
 import { Command, type CommandContext } from "./Command.js";
-import { StartNewGameInputError } from "../errors/StartNewGameInputError.js";
+import { StartNewRoundInputError } from "../errors/StartNewRoundInputError.js";
 import type { PlayerId, TimePoint } from "../typedefs.js";
 
 const MIN_PLAYERS = 4;
 const MAX_PLAYERS = 6;
 const WHITESPACE_PATTERN = /\s/;
 
-export class StartNewGame extends Command {
-  readonly type = "StartNewGame" as const;
+/**
+ * Validation happens in the constructor to fail fast and guarantee invariants
+ * for all instances.
+ */
+export class StartNewRound extends Command {
+  readonly type = "StartNewRound" as const;
 
   constructor(
     public readonly players: readonly PlayerId[],
@@ -16,18 +20,26 @@ export class StartNewGame extends Command {
   ) {
     super();
 
-    const issues = StartNewGame.validateInput(players, activePlayer);
+    const issues = StartNewRound.validateInput(players, activePlayer);
     if (issues.length > 0) {
-      throw StartNewGameInputError.because(issues);
+      throw StartNewRoundInputError.because(issues);
     }
   }
 
-  async execute({ gateway, bus }: CommandContext): Promise<void> {
+  async execute({ gateway, bus, logger }: CommandContext): Promise<void> {
     const round = await gateway.startNewRound([...this.players], this.activePlayer);
+
+    logger?.info?.("Round started", {
+      type: this.type,
+      roundId: round.id,
+      at: this.at,
+    });
 
     await bus.publish(`round:${round.id}`, {
       type: "RoundStarted",
-      round,
+      roundId: round.id,
+      players: [...round.players],
+      activePlayer: round.activePlayer,
       at: this.at,
     });
   }

@@ -1,9 +1,6 @@
 import { Command, type CommandContext } from "./Command.js";
 import { StartNewRoundInputError } from "../errors/StartNewRoundInputError.js";
 import type { PlayerId, TimePoint } from "../typedefs.js";
-
-const MIN_PLAYERS = 4;
-const MAX_PLAYERS = 6;
 const WHITESPACE_PATTERN = /\s/;
 
 /**
@@ -20,14 +17,24 @@ export class StartNewRound extends Command {
   ) {
     super();
 
-    const issues = StartNewRound.validateInput(players, activePlayer);
+    const issues = StartNewRound.validateStaticInvariants(players, activePlayer);
     if (issues.length > 0) {
       throw StartNewRoundInputError.because(issues);
     }
   }
 
-  async execute({ gateway, bus, logger }: CommandContext): Promise<void> {
+  async execute({ gateway, bus, logger, config }: CommandContext): Promise<void> {
+    const issues = StartNewRound.validateAgainstConfig(this.players, config);
+    if (issues.length > 0) {
+      throw StartNewRoundInputError.because(issues);
+    }
+
     const round = await gateway.startNewRound([...this.players], this.activePlayer);
+
+    const promptDeadline = this.at + config.promptDurationMs;
+    round.promptDeadline = promptDeadline;
+
+    await gateway.saveRoundState(round);
 
     logger?.info?.("Round started", {
       type: this.type,
@@ -41,26 +48,23 @@ export class StartNewRound extends Command {
       players: [...round.players],
       activePlayer: round.activePlayer,
       at: this.at,
+      promptDeadline,
     });
   }
 
-  private static validateInput(
+  private static validateStaticInvariants(
     players: readonly PlayerId[],
     activePlayer: PlayerId,
   ): string[] {
     const issues: string[] = [];
 
     if (!Array.isArray(players) || players.length === 0) {
-      issues.push(this.rangeMessage());
+      issues.push("Players list must contain at least one player");
       return issues;
     }
 
     if (players.some((player) => !this.isValidPlayerId(player))) {
       issues.push("Players must be non-empty strings without whitespace");
-    }
-
-    if (players.length < MIN_PLAYERS || players.length > MAX_PLAYERS) {
-      issues.push(this.rangeMessage());
     }
 
     const uniquePlayers = new Set(players);
@@ -77,11 +81,20 @@ export class StartNewRound extends Command {
     return issues;
   }
 
-  private static isValidPlayerId(id: unknown): id is PlayerId {
-    return typeof id === "string" && id.length > 0 && !WHITESPACE_PATTERN.test(id);
+  private static validateAgainstConfig(
+    players: readonly PlayerId[],
+    config: CommandContext["config"],
+  ): string[] {
+    if (players.length < config.minPlayers || players.length > config.maxPlayers) {
+      return [
+        `Players list must contain between ${config.minPlayers} and ${config.maxPlayers} players`,
+      ];
+    }
+
+    return [];
   }
 
-  private static rangeMessage(): string {
-    return `Players list must contain between ${MIN_PLAYERS} and ${MAX_PLAYERS} players`;
+  private static isValidPlayerId(id: unknown): id is PlayerId {
+    return typeof id === "string" && id.length > 0 && !WHITESPACE_PATTERN.test(id);
   }
 }

@@ -88,12 +88,17 @@ export interface RoundState {
 ### 3.3 RoundGateway (persistence boundary)
 
 ```ts
+export interface PromptAppendResult {
+  count: number; // total prompts stored after mutation
+  inserted: boolean; // false when submission was a duplicate
+}
+
 export interface RoundGateway {
   loadRoundState(roundId: RoundId): Promise<RoundState>;
   saveRoundState(state: RoundState): Promise<void>; // adapters choose optimistic or diff-merge
 
   // Atomic mutations that return updated counts to avoid update-then-read
-  appendPrompt(roundId: RoundId, playerId: PlayerId, prompt: string): Promise<number>;
+  appendPrompt(roundId: RoundId, playerId: PlayerId, prompt: string): Promise<PromptAppendResult>;
   appendVote(roundId: RoundId, playerId: PlayerId, promptIndex: number): Promise<number>;
   countSubmittedPrompts(roundId: RoundId): Promise<number>;
 
@@ -204,10 +209,16 @@ export class SubmitPrompt extends Command {
     if (state.activePlayer !== this.playerId) throw new Error("Only active player can submit real prompt");
 
     // Persist atomically & get updated count
-    const submitted = await gateway.appendPrompt(this.roundId, this.playerId, this.prompt);
+    const { count: promptCount, inserted } = await gateway.appendPrompt(
+      this.roundId,
+      this.playerId,
+      this.prompt,
+    );
+
+    if (!inserted) return; // already persisted elsewhere; idempotent command
 
     // If prompt phase is satisfied (active player submitted), advance to guessing
-    if (submitted >= 1) {
+    if (promptCount >= 1) {
       state.phase = "guessing";
       // guessingDeadline should already be set at round creation; keep it as-is
       await gateway.saveRoundState(state);
@@ -235,7 +246,13 @@ export class SubmitDecoy extends Command {
     if (state.activePlayer === this.playerId) throw new Error("Active player does not submit a decoy");
     if (state.guessingDeadline && this.at > state.guessingDeadline) throw new Error("Guessing deadline passed");
 
-    const count = await gateway.appendPrompt(this.roundId, this.playerId, this.prompt);
+    const { count, inserted } = await gateway.appendPrompt(
+      this.roundId,
+      this.playerId,
+      this.prompt,
+    );
+    if (!inserted) return; // ignore duplicate decoys
+
     const required = state.players.length - 1; // everyone except active player
 
     const allSubmitted = count >= required;

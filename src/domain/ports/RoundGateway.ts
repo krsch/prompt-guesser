@@ -53,6 +53,9 @@ export interface RoundState {
   /** Deadline for players to vote */
   votingDeadline?: TimePoint;
 
+  /** Generated image URL shared during the guessing phase */
+  imageUrl?: string;
+
   /** When the round was completed and finalized */
   finishedAt?: TimePoint;
 }
@@ -73,6 +76,14 @@ export type MutableRoundFields =
  * Persistence abstraction for managing the lifecycle of one game round.
  * Implementations must handle atomicity, concurrency, and consistency internally.
  */
+export interface PromptAppendResult {
+  /** Total number of prompts recorded after the mutation completes. */
+  count: number;
+
+  /** Whether a new prompt was inserted. False when the submission was a duplicate. */
+  inserted: boolean;
+}
+
 export interface RoundGateway {
   /** Load the full round state */
   loadRoundState(roundId: RoundId): Promise<RoundState>;
@@ -92,7 +103,7 @@ export interface RoundGateway {
     roundId: RoundId,
     playerId: PlayerId,
     prompt: string
-  ): Promise<number>;
+  ): Promise<PromptAppendResult>;
 
   /**
    * Record a player's vote atomically.

@@ -1,4 +1,4 @@
-import type { RoundId, PlayerId, TimePoint, RoundPhase } from "../typedefs";
+import type { RoundId, PlayerId, TimePoint, RoundPhase } from "../typedefs.js";
 
 /**
  * The authoritative domain snapshot of a single round of the game.
@@ -119,4 +119,3 @@ export interface RoundGateway {
     activePlayer: PlayerId
   ): Promise<RoundState>;
 }
-

@@ -1,6 +1,7 @@
 {
   "name": "prompt-guesser",
   "version": "0.0.1",
+  "type": "module",
   "description": "Prompt Guesser is an online, turn-based party game for 4–6 players.",
   "main": "index.js",
   "directories": {

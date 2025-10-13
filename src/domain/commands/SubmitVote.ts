@@ -57,14 +57,8 @@ export class SubmitVote extends Command {
       return;
     }
 
-    const remainingGuessers = state.players.filter((playerId) => {
-      if (playerId === state.activePlayer) {
-        return false;
-      }
-      return !Object.prototype.hasOwnProperty.call(votes, playerId);
-    });
-
-    if (remainingGuessers.length > 0) {
+    const eligibleVoterCount = state.players.length - 1;
+    if (Object.keys(votes).length !== eligibleVoterCount) {
       return;
     }
 

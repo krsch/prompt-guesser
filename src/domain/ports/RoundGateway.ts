@@ -127,6 +127,8 @@ export interface RoundGateway {
    */
   startNewRound(
     players: PlayerId[],
-    activePlayer: PlayerId
+    activePlayer: PlayerId,
+    startedAt: TimePoint,
+    promptDeadline: TimePoint,
   ): Promise<RoundState>;
 }

@@ -5,6 +5,7 @@ import { StartNewRoundInputError } from "../src/domain/errors/StartNewRoundInput
 import type { RoundGateway } from "../src/domain/ports/RoundGateway";
 import type { MessageBus } from "../src/domain/ports/MessageBus";
 import { GameConfig } from "../src/domain/GameConfig";
+import type { ImageGenerator } from "../src/domain/ports/ImageGenerator";
 
 const makeGateway = () =>
   ({
@@ -16,6 +17,11 @@ const makeBus = () =>
   ({
     publish: vi.fn(),
   }) satisfies Partial<MessageBus>;
+
+const makeImageGenerator = () =>
+  ({
+    generate: vi.fn(),
+  }) satisfies Partial<ImageGenerator>;
 
 const makeConfig = () => GameConfig.withDefaults();
 
@@ -34,6 +40,7 @@ describe("StartNewRound command", () => {
       activePlayer,
       phase: "prompt",
       startedAt: now,
+      promptDeadline: now + config.promptDurationMs,
     };
     gateway.startNewRound.mockResolvedValue(roundState);
 
@@ -41,16 +48,17 @@ describe("StartNewRound command", () => {
     await command.execute({
       gateway: gateway as RoundGateway,
       bus: bus as MessageBus,
+      imageGenerator: makeImageGenerator() as ImageGenerator,
       config,
     });
 
-    expect(gateway.startNewRound).toHaveBeenCalledWith(players, activePlayer);
-    expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
-    expect(gateway.saveRoundState).toHaveBeenCalledWith(
-      expect.objectContaining({
-        promptDeadline: now + config.promptDurationMs,
-      }),
+    expect(gateway.startNewRound).toHaveBeenCalledWith(
+      players,
+      activePlayer,
+      now,
+      now + config.promptDurationMs,
     );
+    expect(gateway.saveRoundState).not.toHaveBeenCalled();
     expect(bus.publish).toHaveBeenCalledWith("round:round-1", {
       type: "RoundStarted",
       roundId: "round-1",
@@ -68,6 +76,7 @@ describe("StartNewRound command", () => {
       command.execute({
         gateway: gateway as RoundGateway,
         bus: makeBus() as MessageBus,
+        imageGenerator: makeImageGenerator() as ImageGenerator,
         config: makeConfig(),
       }),
     ).rejects.toThrow(StartNewRoundInputError);
@@ -83,6 +92,7 @@ describe("StartNewRound command", () => {
       command.execute({
         gateway: gateway as RoundGateway,
         bus: makeBus() as MessageBus,
+        imageGenerator: makeImageGenerator() as ImageGenerator,
         config: makeConfig(),
       }),
     ).rejects.toThrow(StartNewRoundInputError);

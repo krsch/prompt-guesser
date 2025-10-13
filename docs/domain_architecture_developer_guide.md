@@ -81,9 +81,15 @@ export interface RoundState {
   promptDeadline?: TimePoint;
   guessingDeadline?: TimePoint;
   votingDeadline?: TimePoint;
+  imageUrl?: string;
   finishedAt?: TimePoint;
 }
 ```
+
+The optional `imageUrl` is populated once the real prompt has been accepted and
+an image has been generated for the round. Before the guessing phase begins the
+field will be `undefined`, allowing adapters to distinguish rounds that have
+not yet produced a shareable image.
 
 ### 3.3 RoundGateway (persistence boundary)
 
@@ -102,7 +108,12 @@ export interface RoundGateway {
   appendVote(roundId: RoundId, playerId: PlayerId, promptIndex: number): Promise<number>;
   countSubmittedPrompts(roundId: RoundId): Promise<number>;
 
-  startNewRound(players: PlayerId[], activePlayer: PlayerId): Promise<RoundState>;
+  startNewRound(
+    players: PlayerId[],
+    activePlayer: PlayerId,
+    startedAt: TimePoint,
+    promptDeadline: TimePoint,
+  ): Promise<RoundState>;
 }
 ```
 

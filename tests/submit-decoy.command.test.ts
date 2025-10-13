@@ -4,13 +4,13 @@ import { SubmitDecoy } from "../src/domain/commands/SubmitDecoy";
 import type { RoundGateway, RoundState } from "../src/domain/ports/RoundGateway";
 import type { MessageBus } from "../src/domain/ports/MessageBus";
 import { GameConfig } from "../src/domain/GameConfig";
+import type { Scheduler } from "../src/domain/ports/Scheduler";
 
 const makeGateway = () =>
   ({
     loadRoundState: vi.fn(),
     appendPrompt: vi.fn(),
     saveRoundState: vi.fn(),
-    scheduleTimeout: vi.fn(),
     shufflePrompts: vi.fn((_, prompts: any[]) => prompts),
   }) satisfies Partial<RoundGateway>;
 
@@ -21,6 +21,11 @@ const makeBus = () =>
 
 const makeConfig = () => GameConfig.withDefaults();
 
+const makeScheduler = () =>
+  ({
+    scheduleTimeout: vi.fn(),
+  }) satisfies Partial<Scheduler>;
+
 const PLAYERS = ["active", "blue", "green", "orange"] as const;
 
 describe("SubmitDecoy command", () => {
@@ -28,6 +33,7 @@ describe("SubmitDecoy command", () => {
     const gateway = makeGateway();
     const bus = makeBus();
     const config = makeConfig();
+    const scheduler = makeScheduler();
     const now = Date.now();
     const round: RoundState = {
       id: "round-123",
@@ -35,8 +41,6 @@ describe("SubmitDecoy command", () => {
       activePlayer: PLAYERS[0],
       phase: "guessing",
       startedAt: now - 5_000,
-      promptDeadline: now - 1_000,
-      guessingDeadline: now + 5_000,
       prompts: {
         [PLAYERS[0]]: "real prompt",
         [PLAYERS[2]]: "green decoy",
@@ -61,9 +65,8 @@ describe("SubmitDecoy command", () => {
       bus: bus as MessageBus,
       imageGenerator: { generate: vi.fn() } as any,
       config,
+      scheduler: scheduler as Scheduler,
     });
-
-    const votingDeadline = now + config.votingDurationMs;
 
     expect(gateway.appendPrompt).toHaveBeenCalledWith(round.id, PLAYERS[1], "blue decoy");
     expect(gateway.shufflePrompts).toHaveBeenCalledWith(round.id, [
@@ -90,16 +93,14 @@ describe("SubmitDecoy command", () => {
           "orange decoy",
         ],
         shuffledPromptOwners: [...PLAYERS],
-        votingDeadline,
       }),
     );
-    expect(gateway.scheduleTimeout).toHaveBeenCalledWith(round.id, "voting", votingDeadline);
 
     expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
       type: "PromptsReady",
       roundId: round.id,
       prompts: ["real prompt", "blue decoy", "green decoy", "orange decoy"],
-      votingDeadline,
+      votingDurationMs: config.votingDurationMs,
       at: now,
     });
     expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
@@ -107,12 +108,18 @@ describe("SubmitDecoy command", () => {
       phase: "voting",
       at: now,
     });
+    expect(scheduler.scheduleTimeout).toHaveBeenCalledWith(
+      round.id,
+      "voting",
+      config.votingDurationMs,
+    );
   });
 
   it("does not transition when not all prompts have been submitted", async () => {
     const gateway = makeGateway();
     const bus = makeBus();
     const config = makeConfig();
+    const scheduler = makeScheduler();
     const now = Date.now();
     const round: RoundState = {
       id: "round-123",
@@ -120,8 +127,6 @@ describe("SubmitDecoy command", () => {
       activePlayer: PLAYERS[0],
       phase: "guessing",
       startedAt: now - 5_000,
-      promptDeadline: now - 1_000,
-      guessingDeadline: now + 5_000,
       prompts: {
         [PLAYERS[0]]: "real prompt",
       },
@@ -142,17 +147,19 @@ describe("SubmitDecoy command", () => {
       bus: bus as MessageBus,
       imageGenerator: { generate: vi.fn() } as any,
       config,
+      scheduler: scheduler as Scheduler,
     });
 
     expect(gateway.saveRoundState).not.toHaveBeenCalled();
-    expect(gateway.scheduleTimeout).not.toHaveBeenCalled();
     expect(bus.publish).not.toHaveBeenCalled();
+    expect(scheduler.scheduleTimeout).not.toHaveBeenCalled();
   });
 
   it("is idempotent when the decoy already exists", async () => {
     const gateway = makeGateway();
     const bus = makeBus();
     const config = makeConfig();
+    const scheduler = makeScheduler();
     const now = Date.now();
     const round: RoundState = {
       id: "round-123",
@@ -160,8 +167,6 @@ describe("SubmitDecoy command", () => {
       activePlayer: PLAYERS[0],
       phase: "guessing",
       startedAt: now - 5_000,
-      promptDeadline: now - 1_000,
-      guessingDeadline: now + 5_000,
       prompts: {
         [PLAYERS[0]]: "real prompt",
         [PLAYERS[1]]: "blue decoy",
@@ -183,15 +188,18 @@ describe("SubmitDecoy command", () => {
       bus: bus as MessageBus,
       imageGenerator: { generate: vi.fn() } as any,
       config,
+      scheduler: scheduler as Scheduler,
     });
 
     expect(gateway.saveRoundState).not.toHaveBeenCalled();
     expect(bus.publish).not.toHaveBeenCalled();
+    expect(scheduler.scheduleTimeout).not.toHaveBeenCalled();
   });
 
   it("throws when executed outside of the guessing phase", async () => {
     const gateway = makeGateway();
     const config = makeConfig();
+    const scheduler = makeScheduler();
     const now = Date.now();
     const round: RoundState = {
       id: "round-123",
@@ -211,6 +219,7 @@ describe("SubmitDecoy command", () => {
         bus: makeBus() as MessageBus,
         imageGenerator: { generate: vi.fn() } as any,
         config,
+        scheduler: scheduler as Scheduler,
       }),
     ).rejects.toThrow(/guessing phase/);
   });
@@ -218,6 +227,7 @@ describe("SubmitDecoy command", () => {
   it("throws when the active player tries to submit a decoy", async () => {
     const gateway = makeGateway();
     const config = makeConfig();
+    const scheduler = makeScheduler();
     const now = Date.now();
     const round: RoundState = {
       id: "round-123",
@@ -225,7 +235,6 @@ describe("SubmitDecoy command", () => {
       activePlayer: PLAYERS[0],
       phase: "guessing",
       startedAt: now - 5_000,
-      guessingDeadline: now + 5_000,
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
@@ -238,34 +247,9 @@ describe("SubmitDecoy command", () => {
         bus: makeBus() as MessageBus,
         imageGenerator: { generate: vi.fn() } as any,
         config,
+        scheduler: scheduler as Scheduler,
       }),
     ).rejects.toThrow(/Active player/);
   });
 
-  it("throws when the guessing deadline has passed", async () => {
-    const gateway = makeGateway();
-    const config = makeConfig();
-    const now = Date.now();
-    const round: RoundState = {
-      id: "round-123",
-      players: [...PLAYERS],
-      activePlayer: PLAYERS[0],
-      phase: "guessing",
-      startedAt: now - 5_000,
-      guessingDeadline: now,
-    };
-
-    gateway.loadRoundState.mockResolvedValue(round);
-
-    const command = new SubmitDecoy(round.id, PLAYERS[1], "late", now);
-
-    await expect(
-      command.execute({
-        gateway: gateway as RoundGateway,
-        bus: makeBus() as MessageBus,
-        imageGenerator: { generate: vi.fn() } as any,
-        config,
-      }),
-    ).rejects.toThrow(/deadline/);
-  });
 });

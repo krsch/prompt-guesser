@@ -8,7 +8,7 @@
 
 - **Domain-first, runtime-agnostic.** All game rules live in the domain. No runtime APIs (no fetch, timers, env) inside domain code.
 - **Commands as classes.** Each user/system action is a class with an `execute(ctx)` method. All commands go through a single `dispatchCommand` entry for logging/auditing.
-- **Event-driven time.** We never poll or sleep. Commands carry their own timestamp (`TimePoint`) and deadlines are explicit in state.
+- **Event-driven timeouts.** We never poll or sleep. Commands carry their own timestamp (`TimePoint`) and the runtime schedules phase transitions externally; the domain remains deterministic and wall-clock agnostic.
 - **Round-focused aggregate.** We model one **Round** (not the entire multi-round game) as the main aggregate (`RoundState`).
 - **Concurrency-conscious persistence.** Storage adapters expose atomic mutations (e.g., `appendPrompt`, `appendVote`) that return up-to-date snapshots. A general `saveRoundState` exists for phase transitions/finalize; adapters choose optimistic or diff-merge internally.
 - **Portable ports.** Domain depends only on ports: `RoundGateway`, `MessageBus`, `ImageGenerator`, `Logger` (typedefs for `RoundId`, `PlayerId`, `TimePoint`, `RoundPhase`).
@@ -78,9 +78,6 @@ export interface RoundState {
   scores?: Record<PlayerId, number>;      // set at scoring
 
   startedAt: TimePoint;
-  promptDeadline?: TimePoint;
-  guessingDeadline?: TimePoint;
-  votingDeadline?: TimePoint;
   imageUrl?: string;
   finishedAt?: TimePoint;
 }
@@ -117,7 +114,6 @@ export interface RoundGateway {
     players: PlayerId[],
     activePlayer: PlayerId,
     startedAt: TimePoint,
-    promptDeadline: TimePoint,
   ): Promise<RoundState>;
 }
 ```
@@ -149,6 +145,22 @@ export interface Logger {
 }
 ```
 
+### 3.7 Scheduler (runtime-managed timeouts)
+
+```ts
+export interface Scheduler {
+  scheduleTimeout(
+    roundId: RoundId,
+    phase: PhaseTimeout["phase"],
+    delayMs: number,
+  ): Promise<void>;
+}
+```
+
+The scheduler belongs to the infrastructure/runtime layer. When the domain transitions between phases, the surrounding
+application decides whether to queue a `PhaseTimeout` command using this port. The adapter determines when to fire the timeout
+based on its notion of time, keeping wall-clock orchestration out of the pure domain logic.
+
 ---
 
 ## 4) Command Model
@@ -160,6 +172,9 @@ export interface Logger {
 export interface CommandContext {
   gateway: RoundGateway;
   bus: MessageBus;
+  imageGenerator: ImageGenerator;
+  config: GameConfig;
+  scheduler: Scheduler;
   logger?: Logger;
 }
 
@@ -206,176 +221,33 @@ These never touch adapters; they just process inputs and return outputs.
 
 ## 6) Reference Commands (Patterns)
 
-### 6.1 SubmitPrompt (real prompt by active player)
+The production commands in `src/domain/commands` follow a consistent structure. At a high level:
 
-```ts
-export class SubmitPrompt extends Command {
-  readonly type = "SubmitPrompt" as const;
-  constructor(
-    public readonly roundId: RoundId,
-    public readonly playerId: PlayerId,
-    public readonly prompt: string,
-    public readonly at: TimePoint
-  ) { super(); }
+- **SubmitPrompt**
+  - Validates the round is in the `prompt` phase and that the submitting player matches `activePlayer`.
+  - Stores the prompt via `appendPrompt`, generates the shared image, updates the round to the `guessing` phase, and emits
+    `ImageGenerated` / `PhaseChanged` events.
+  - The runtime inspects the resulting phase and schedules the next `PhaseTimeout` using the configured guessing duration.
 
-  async execute({ gateway, bus }: CommandContext): Promise<void> {
-    const state = await gateway.loadRoundState(this.roundId);
-    // Validate
-    if (state.phase !== "prompt") throw new Error("Not in prompt phase");
-    if (state.activePlayer !== this.playerId) throw new Error("Only active player can submit real prompt");
+- **SubmitDecoy**
+  - Ensures the round is in `guessing`, the player belongs to the round, and is not the active player.
+  - Persists the decoy; once every player has submitted a prompt the command transitions the round to `voting`, shuffling prompts
+    deterministically through the gateway and publishing `PromptsReady` / `PhaseChanged` events.
+  - Runtime scheduling logic can observe the phase change and queue the next timeout.
 
-    // Persist atomically & read snapshot
-    const { inserted, prompts } = await gateway.appendPrompt(
-      this.roundId,
-      this.playerId,
-      this.prompt,
-    );
+- **SubmitVote**
+  - Checks `voting` phase invariants and records the vote atomically. When all eligible voters have cast a vote it calls
+    `finalizeRound`, which computes scores, enters `scoring`, and finally marks the round `finished` while emitting the
+    corresponding events.
 
-    if (!inserted) return; // already persisted elsewhere; idempotent command
+- **PhaseTimeout**
+  - Loads the current round snapshot and exits immediately if the stored phase no longer matches the expected phase (idempotent).
+  - For the `prompt` timeout, it awards zero scores to everyone and finishes the round. For the `guessing` timeout it promotes the
+    round to `voting` using whatever prompts are available. For the `voting` timeout it delegates to `finalizeRound`.
+  - No wall-clock comparisons occur inside the command—the runtime is responsible for dispatching it at the appropriate time.
 
-    // If prompt phase is satisfied (active player submitted), advance to guessing
-    if (prompts[this.playerId] === this.prompt) {
-      state.phase = "guessing";
-      // guessingDeadline should already be set at round creation; keep it as-is
-      await gateway.saveRoundState(state);
-      await bus.publish(`round:${state.id}`, { type: "PhaseChanged", phase: state.phase, at: this.at });
-    }
-  }
-}
-```
-
-### 6.2 SubmitDecoy (decoy prompt by non-active players)
-
-```ts
-export class SubmitDecoy extends Command {
-  readonly type = "SubmitDecoy" as const;
-  constructor(
-    public readonly roundId: RoundId,
-    public readonly playerId: PlayerId,
-    public readonly prompt: string,
-    public readonly at: TimePoint
-  ) { super(); }
-
-  async execute({ gateway, bus }: CommandContext): Promise<void> {
-    const state = await gateway.loadRoundState(this.roundId);
-    if (state.phase !== "guessing") throw new Error("Not in guessing phase");
-    if (state.activePlayer === this.playerId) throw new Error("Active player does not submit a decoy");
-    if (state.guessingDeadline && this.at > state.guessingDeadline) throw new Error("Guessing deadline passed");
-
-    const { inserted, prompts } = await gateway.appendPrompt(
-      this.roundId,
-      this.playerId,
-      this.prompt,
-    );
-    if (!inserted) return; // ignore duplicate decoys
-
-    const required = state.players.length - 1; // everyone except active player
-
-    const allSubmitted = Object.keys(prompts).length >= required;
-    const timedOut = !!state.guessingDeadline && this.at >= state.guessingDeadline;
-
-    if (allSubmitted || timedOut) {
-      // Produce shuffledPrompts in-memory and persist via saveRoundState
-      const prompts = { ...(state.prompts ?? {}), [this.playerId]: this.prompt };
-      const all = [prompts[state.activePlayer]!, ...Object.entries(prompts)
-        .filter(([pid]) => pid !== state.activePlayer)
-        .map(([, p]) => p)];
-      // TODO: replace with RoundRules.shufflePrompts(prompts) for deterministic shuffling
-      state.prompts = prompts;
-      state.shuffledPrompts = all.sort(() => Math.random() - 0.5);
-      state.phase = "voting";
-      await gateway.saveRoundState(state);
-      await bus.publish(`round:${state.id}`, { type: "PhaseChanged", phase: state.phase, at: this.at });
-    }
-  }
-}
-```
-
-### 6.3 SubmitVote (vote by any player)
-
-```ts
-export class SubmitVote extends Command {
-  readonly type = "SubmitVote" as const;
-  constructor(
-    public readonly roundId: RoundId,
-    public readonly playerId: PlayerId,
-    public readonly promptIndex: number,
-    public readonly at: TimePoint
-  ) { super(); }
-
-  async execute({ gateway, bus }: CommandContext): Promise<void> {
-    const state = await gateway.loadRoundState(this.roundId);
-    if (state.phase !== "voting") throw new Error("Not in voting phase");
-    if (!state.shuffledPrompts || this.promptIndex < 0 || this.promptIndex >= state.shuffledPrompts.length)
-      throw new Error("Invalid vote index");
-    if (state.votingDeadline && this.at > state.votingDeadline) throw new Error("Voting deadline passed");
-
-    const { votes, inserted } = await gateway.appendVote(
-      this.roundId,
-      this.playerId,
-      this.promptIndex,
-    );
-    if (!inserted) return;
-
-    const allVoted = Object.keys(votes).length >= state.players.length;
-    const timedOut = !!state.votingDeadline && this.at >= state.votingDeadline;
-
-    if (allVoted || timedOut) {
-      // Compute scores and finish
-      // TODO: use RoundRules.calculateScores(state)
-      const scores = {} as Record<PlayerId, number>;
-      for (const pid of state.players) scores[pid] = 0; // placeholder
-
-      state.scores = scores;
-      state.phase = "scoring";
-      await gateway.saveRoundState(state);
-      await bus.publish(`round:${state.id}`, { type: "PhaseChanged", phase: state.phase, at: this.at });
-
-      // Optionally finalize
-      state.phase = "finished";
-      state.finishedAt = this.at;
-      await gateway.saveRoundState(state);
-      await bus.publish(`round:${state.id}`, { type: "RoundFinished", at: this.at, scores: state.scores });
-    }
-  }
-}
-```
-
-### 6.4 PhaseTimeout (system-triggered)
-
-```ts
-export class PhaseTimeout extends Command {
-  readonly type = "PhaseTimeout" as const;
-  constructor(
-    public readonly roundId: RoundId,
-    public readonly phase: Exclude<RoundPhase, "scoring" | "finished">,
-    public readonly at: TimePoint
-  ) { super(); }
-
-  async execute({ gateway, bus }: CommandContext): Promise<void> {
-    const state = await gateway.loadRoundState(this.roundId);
-    if (state.phase !== this.phase) return; // idempotent no-op if already advanced
-
-    // Advance phase based on which deadline expired
-    if (this.phase === "prompt" && state.promptDeadline && this.at >= state.promptDeadline) {
-      state.phase = "guessing";
-    } else if (this.phase === "guessing" && state.guessingDeadline && this.at >= state.guessingDeadline) {
-      // shuffle available prompts (may be incomplete)
-      state.shuffledPrompts = Object.values(state.prompts ?? {}).sort(() => Math.random() - 0.5);
-      state.phase = "voting";
-    } else if (this.phase === "voting" && state.votingDeadline && this.at >= state.votingDeadline) {
-      state.phase = "scoring";
-    } else {
-      return; // deadline not actually expired
-    }
-
-    await gateway.saveRoundState(state);
-    await bus.publish(`round:${state.id}`, { type: "PhaseChanged", phase: state.phase, at: this.at });
-  }
-}
-```
-
-> **Note:** Examples above intentionally keep scoring/shuffling placeholders. Implement real logic in `RoundRules.ts` and import here.
+> **Note:** Each transition persists the updated snapshot exactly once and emits domain events. Use the existing command
+> implementations in the repository as the source of truth.
 
 ---
 
@@ -405,7 +277,7 @@ export class PhaseTimeout extends Command {
 
 1. **Decide intent and phase.** Which phase accepts this action? What invariants apply?
 2. **Create command class** in `/domain/commands`, extending `Command` and adding required fields.
-3. **Validate** inside `execute`: phase, actor permissions, deadlines, indices.
+3. **Validate** inside `execute`: phase, actor permissions, indices, and other state-driven invariants.
 4. **Use gateway** methods for persistence. Avoid read-after-write by relying on returned snapshots.
 5. **Advance phase** if needed, then `saveRoundState` once per transition.
 6. **Publish events** via `MessageBus` to notify clients.
@@ -418,7 +290,7 @@ export class PhaseTimeout extends Command {
 - **Unit tests (pure):** `RoundRules` (shuffling, scoring, validations) with fixed seeds and snapshots.
 - **Command tests:** Use `memory` gateway + `noop` bus to verify:
   - valid/invalid transitions
-  - deadlines enforcement
+  - phase-driven invariants and event sequencing
   - idempotency (double submit doesn’t modify stored state)
   - concurrency (simulate interleaving by ordering promises)
 - **Adapter contract tests:** Same test suite should pass for `memory`, `dynamo`, and `postgres` implementations.

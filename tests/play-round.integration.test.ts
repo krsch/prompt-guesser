@@ -8,6 +8,7 @@ import { SubmitDecoy } from "../src/domain/commands/SubmitDecoy";
 import { SubmitVote } from "../src/domain/commands/SubmitVote";
 import type { MessageBus } from "../src/domain/ports/MessageBus";
 import type { ImageGenerator } from "../src/domain/ports/ImageGenerator";
+import type { Scheduler } from "../src/domain/ports/Scheduler";
 
 const players = ["alex", "bailey", "casey", "devon"];
 const activePlayer = players[0];
@@ -29,6 +30,13 @@ describe("Integration: play a full round", () => {
       },
     };
 
+    const scheduler: Scheduler = {
+      async scheduleTimeout(_roundId, _phase, _delayMs) {
+        // Integration test advances phases explicitly by running commands; scheduled timeouts are
+        // dispatched manually when needed.
+      },
+    };
+
     const config = GameConfig.withDefaults();
 
     const startedAt = Date.UTC(2024, 4, 20, 12, 0, 0);
@@ -38,6 +46,7 @@ describe("Integration: play a full round", () => {
       bus,
       imageGenerator,
       config,
+      scheduler,
     });
 
     const roundStarted = events.find((entry) => entry.event.type === "RoundStarted");
@@ -50,6 +59,7 @@ describe("Integration: play a full round", () => {
       bus,
       imageGenerator,
       config,
+      scheduler,
     });
 
     const guessingEvents = events.filter((entry) => entry.event.type === "PhaseChanged");
@@ -60,18 +70,21 @@ describe("Integration: play a full round", () => {
       bus,
       imageGenerator,
       config,
+      scheduler,
     });
     await new SubmitDecoy(roundId, players[2], "A rabbit skiing", promptTime + 2_000).execute({
       gateway,
       bus,
       imageGenerator,
       config,
+      scheduler,
     });
     await new SubmitDecoy(roundId, players[3], "A turtle surfing", promptTime + 3_000).execute({
       gateway,
       bus,
       imageGenerator,
       config,
+      scheduler,
     });
 
     const roundStateAfterPrompts = await gateway.loadRoundState(roundId);
@@ -91,18 +104,21 @@ describe("Integration: play a full round", () => {
       bus,
       imageGenerator,
       config,
+      scheduler,
     });
     await new SubmitVote(roundId, players[2], 2, promptTime + 6_000).execute({
       gateway,
       bus,
       imageGenerator,
       config,
+      scheduler,
     });
     await new SubmitVote(roundId, players[3], 1, promptTime + 7_000).execute({
       gateway,
       bus,
       imageGenerator,
       config,
+      scheduler,
     });
 
     const finalState = await gateway.loadRoundState(roundId);

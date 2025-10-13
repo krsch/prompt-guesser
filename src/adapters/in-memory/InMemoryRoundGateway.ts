@@ -5,12 +5,11 @@ import type {
   RoundState,
   VoteAppendResult,
 } from "../../domain/ports/RoundGateway.js";
-import type { PlayerId, RoundId, RoundPhase, TimePoint } from "../../domain/typedefs.js";
+import type { PlayerId, RoundId, TimePoint } from "../../domain/typedefs.js";
 
 export class InMemoryRoundGateway implements RoundGateway {
   #rounds = new Map<RoundId, RoundState>();
   #nextId = 1;
-  #timeouts = new Map<RoundId, Map<RoundPhase, TimePoint>>();
 
   async loadRoundState(roundId: RoundId): Promise<RoundState> {
     const state = this.#rounds.get(roundId);
@@ -94,7 +93,6 @@ export class InMemoryRoundGateway implements RoundGateway {
     players: PlayerId[],
     activePlayer: PlayerId,
     startedAt: TimePoint,
-    promptDeadline: TimePoint,
   ): Promise<RoundState> {
     const state: RoundState = {
       id: `round-${this.#nextId++}`,
@@ -103,21 +101,10 @@ export class InMemoryRoundGateway implements RoundGateway {
       phase: "prompt",
       prompts: {},
       startedAt,
-      promptDeadline,
     };
 
     this.#rounds.set(state.id, state);
     return this.#clone(state);
-  }
-
-  async scheduleTimeout(roundId: RoundId, phase: RoundPhase, at: TimePoint): Promise<void> {
-    if (!this.#rounds.has(roundId)) throw new RoundNotFoundError(roundId);
-    let timeouts = this.#timeouts.get(roundId);
-    if (!timeouts) {
-      timeouts = new Map();
-      this.#timeouts.set(roundId, timeouts);
-    }
-    timeouts.set(phase, at);
   }
 
   async shufflePrompts(
@@ -132,9 +119,6 @@ export class InMemoryRoundGateway implements RoundGateway {
     return shuffled;
   }
 
-  getScheduledTimeout(roundId: RoundId, phase: RoundPhase): TimePoint | undefined {
-    return this.#timeouts.get(roundId)?.get(phase);
-  }
 
   #clone(state: RoundState): RoundState {
     return JSON.parse(JSON.stringify(state)) as RoundState;

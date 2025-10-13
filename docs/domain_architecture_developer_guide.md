@@ -10,7 +10,7 @@
 - **Commands as classes.** Each user/system action is a class with an `execute(ctx)` method. All commands go through a single `dispatchCommand` entry for logging/auditing.
 - **Event-driven time.** We never poll or sleep. Commands carry their own timestamp (`TimePoint`) and deadlines are explicit in state.
 - **Round-focused aggregate.** We model one **Round** (not the entire multi-round game) as the main aggregate (`RoundState`).
-- **Concurrency-conscious persistence.** Storage adapters expose atomic mutations (e.g., `appendPrompt`, `appendVote`) that return useful counts. A general `saveRoundState` exists for phase transitions/finalize; adapters choose optimistic or diff-merge internally.
+- **Concurrency-conscious persistence.** Storage adapters expose atomic mutations (e.g., `appendPrompt`, `appendVote`) that return up-to-date snapshots. A general `saveRoundState` exists for phase transitions/finalize; adapters choose optimistic or diff-merge internally.
 - **Portable ports.** Domain depends only on ports: `RoundGateway`, `MessageBus`, `ImageGenerator`, `Logger` (typedefs for `RoundId`, `PlayerId`, `TimePoint`, `RoundPhase`).
 
 ---
@@ -95,17 +95,22 @@ not yet produced a shareable image.
 
 ```ts
 export interface PromptAppendResult {
-  count: number; // total prompts stored after mutation
   inserted: boolean; // false when submission was a duplicate
+  prompts: Record<PlayerId, string>;
+}
+
+export interface VoteAppendResult {
+  inserted: boolean;
+  votes: Record<PlayerId, number>;
 }
 
 export interface RoundGateway {
   loadRoundState(roundId: RoundId): Promise<RoundState>;
   saveRoundState(state: RoundState): Promise<void>; // adapters choose optimistic or diff-merge
 
-  // Atomic mutations that return updated counts to avoid update-then-read
+  // Atomic mutations that return updated snapshots to avoid update-then-read
   appendPrompt(roundId: RoundId, playerId: PlayerId, prompt: string): Promise<PromptAppendResult>;
-  appendVote(roundId: RoundId, playerId: PlayerId, promptIndex: number): Promise<number>;
+  appendVote(roundId: RoundId, playerId: PlayerId, promptIndex: number): Promise<VoteAppendResult>;
   countSubmittedPrompts(roundId: RoundId): Promise<number>;
 
   startNewRound(
@@ -219,8 +224,8 @@ export class SubmitPrompt extends Command {
     if (state.phase !== "prompt") throw new Error("Not in prompt phase");
     if (state.activePlayer !== this.playerId) throw new Error("Only active player can submit real prompt");
 
-    // Persist atomically & get updated count
-    const { count: promptCount, inserted } = await gateway.appendPrompt(
+    // Persist atomically & read snapshot
+    const { inserted, prompts } = await gateway.appendPrompt(
       this.roundId,
       this.playerId,
       this.prompt,
@@ -229,7 +234,7 @@ export class SubmitPrompt extends Command {
     if (!inserted) return; // already persisted elsewhere; idempotent command
 
     // If prompt phase is satisfied (active player submitted), advance to guessing
-    if (promptCount >= 1) {
+    if (prompts[this.playerId] === this.prompt) {
       state.phase = "guessing";
       // guessingDeadline should already be set at round creation; keep it as-is
       await gateway.saveRoundState(state);
@@ -257,7 +262,7 @@ export class SubmitDecoy extends Command {
     if (state.activePlayer === this.playerId) throw new Error("Active player does not submit a decoy");
     if (state.guessingDeadline && this.at > state.guessingDeadline) throw new Error("Guessing deadline passed");
 
-    const { count, inserted } = await gateway.appendPrompt(
+    const { inserted, prompts } = await gateway.appendPrompt(
       this.roundId,
       this.playerId,
       this.prompt,
@@ -266,7 +271,7 @@ export class SubmitDecoy extends Command {
 
     const required = state.players.length - 1; // everyone except active player
 
-    const allSubmitted = count >= required;
+    const allSubmitted = Object.keys(prompts).length >= required;
     const timedOut = !!state.guessingDeadline && this.at >= state.guessingDeadline;
 
     if (allSubmitted || timedOut) {
@@ -305,9 +310,14 @@ export class SubmitVote extends Command {
       throw new Error("Invalid vote index");
     if (state.votingDeadline && this.at > state.votingDeadline) throw new Error("Voting deadline passed");
 
-    const votes = await gateway.appendVote(this.roundId, this.playerId, this.promptIndex);
+    const { votes, inserted } = await gateway.appendVote(
+      this.roundId,
+      this.playerId,
+      this.promptIndex,
+    );
+    if (!inserted) return;
 
-    const allVoted = votes >= state.players.length;
+    const allVoted = Object.keys(votes).length >= state.players.length;
     const timedOut = !!state.votingDeadline && this.at >= state.votingDeadline;
 
     if (allVoted || timedOut) {
@@ -371,8 +381,8 @@ export class PhaseTimeout extends Command {
 
 ## 7) Storage Adapter Guidance
 
-- **Atomicity:** `appendPrompt` and `appendVote` must be atomic and **idempotent** (same player submitting twice should not change counts).
-- **Return values:** These methods must return **post-update counts** to avoid update-then-read round trips.
+- **Atomicity:** `appendPrompt` and `appendVote` must be atomic and **idempotent** (same player submitting twice should not change stored state).
+- **Return values:** These methods must return **post-update snapshots** to avoid update-then-read round trips.
 - **`saveRoundState`:** Implement optimistic concurrency or diff-merge internally; the domain should not carry versions.
 - **Static mutability:** Treat fields like `prompts`, `votes`, `phase`, `shuffledPrompts`, `scores`, `finishedAt` as mutable; others are immutable after creation.
 - **Serialization:** Optional fields may be absent in storage; default to empty objects/arrays in adapters when reading if needed.
@@ -396,7 +406,7 @@ export class PhaseTimeout extends Command {
 1. **Decide intent and phase.** Which phase accepts this action? What invariants apply?
 2. **Create command class** in `/domain/commands`, extending `Command` and adding required fields.
 3. **Validate** inside `execute`: phase, actor permissions, deadlines, indices.
-4. **Use gateway** methods for persistence. Avoid read-after-write by relying on returned counts.
+4. **Use gateway** methods for persistence. Avoid read-after-write by relying on returned snapshots.
 5. **Advance phase** if needed, then `saveRoundState` once per transition.
 6. **Publish events** via `MessageBus` to notify clients.
 7. **Write tests**: unit tests for `RoundRules` logic; integration with `memory` gateway adapter.
@@ -409,7 +419,7 @@ export class PhaseTimeout extends Command {
 - **Command tests:** Use `memory` gateway + `noop` bus to verify:
   - valid/invalid transitions
   - deadlines enforcement
-  - idempotency (double submit doesn’t double count)
+  - idempotency (double submit doesn’t modify stored state)
   - concurrency (simulate interleaving by ordering promises)
 - **Adapter contract tests:** Same test suite should pass for `memory`, `dynamo`, and `postgres` implementations.
 

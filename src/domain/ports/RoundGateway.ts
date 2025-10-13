@@ -30,6 +30,12 @@ export interface RoundState {
   shuffledPrompts?: string[];
 
   /**
+   * Owners corresponding to each shuffled prompt.
+   * Mirrors the indices of {@link shuffledPrompts} for scoring.
+   */
+  shuffledPromptOwners?: PlayerId[];
+
+  /**
    * Player votes, each pointing to an index in shuffledPrompts.
    * Present during voting and later phases.
    */
@@ -69,6 +75,7 @@ export type MutableRoundFields =
   | "votes"
   | "phase"
   | "shuffledPrompts"
+  | "shuffledPromptOwners"
   | "scores"
   | "finishedAt";
 
@@ -77,11 +84,19 @@ export type MutableRoundFields =
  * Implementations must handle atomicity, concurrency, and consistency internally.
  */
 export interface PromptAppendResult {
-  /** Total number of prompts recorded after the mutation completes. */
-  count: number;
-
   /** Whether a new prompt was inserted. False when the submission was a duplicate. */
   inserted: boolean;
+
+  /** Snapshot of all prompts after the append operation. */
+  prompts: Record<PlayerId, string>;
+}
+
+export interface VoteAppendResult {
+  /** Whether the vote was newly inserted. */
+  inserted: boolean;
+
+  /** Snapshot of all votes after the append operation. */
+  votes: Record<PlayerId, number>;
 }
 
 export interface RoundGateway {
@@ -96,8 +111,8 @@ export interface RoundGateway {
   saveRoundState(state: RoundState): Promise<void>;
 
   /**
-   * Append or update a player's prompt (real or decoy) atomically.
-   * Returns the total number of submitted prompts after this operation.
+   * Append or update a player's prompt (real or decoy) atomically and
+   * return the resulting snapshot of all prompts.
    */
   appendPrompt(
     roundId: RoundId,
@@ -106,14 +121,14 @@ export interface RoundGateway {
   ): Promise<PromptAppendResult>;
 
   /**
-   * Record a player's vote atomically.
-   * Returns the total number of votes after this operation.
+   * Record a player's vote atomically and return the resulting snapshot of
+   * all votes.
    */
   appendVote(
     roundId: RoundId,
     playerId: PlayerId,
     promptIndex: number
-  ): Promise<number>;
+  ): Promise<VoteAppendResult>;
 
   /**
    * Count how many players have submitted prompts.
@@ -131,4 +146,20 @@ export interface RoundGateway {
     startedAt: TimePoint,
     promptDeadline: TimePoint,
   ): Promise<RoundState>;
+
+  /**
+   * Schedule a timeout for a specific phase. Infrastructure is responsible for
+   * delivering the matching {@link PhaseTimeout} command at the provided time.
+   */
+  scheduleTimeout(roundId: RoundId, phase: RoundPhase, at: TimePoint): Promise<void>;
+
+  /**
+   * Produce a deterministic shuffle for prompts to avoid leaking bias. The
+   * returned collection must be the same length as the input and preserve the
+   * association between prompt text and player.
+   */
+  shufflePrompts(
+    roundId: RoundId,
+    prompts: readonly (readonly [PlayerId, string])[],
+  ): Promise<readonly (readonly [PlayerId, string])[]>;
 }

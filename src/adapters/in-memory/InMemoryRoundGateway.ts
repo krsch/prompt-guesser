@@ -1,10 +1,16 @@
 import { RoundNotFoundError } from "../../domain/errors/index.js";
-import type { PromptAppendResult, RoundGateway, RoundState } from "../../domain/ports/RoundGateway.js";
-import type { PlayerId, RoundId, TimePoint } from "../../domain/typedefs.js";
+import type {
+  PromptAppendResult,
+  RoundGateway,
+  RoundState,
+  VoteAppendResult,
+} from "../../domain/ports/RoundGateway.js";
+import type { PlayerId, RoundId, RoundPhase, TimePoint } from "../../domain/typedefs.js";
 
 export class InMemoryRoundGateway implements RoundGateway {
   #rounds = new Map<RoundId, RoundState>();
   #nextId = 1;
+  #timeouts = new Map<RoundId, Map<RoundPhase, TimePoint>>();
 
   async loadRoundState(roundId: RoundId): Promise<RoundState> {
     const state = this.#rounds.get(roundId);
@@ -13,7 +19,12 @@ export class InMemoryRoundGateway implements RoundGateway {
   }
 
   async saveRoundState(state: RoundState): Promise<void> {
-    if (!this.#rounds.has(state.id)) throw new RoundNotFoundError(state.id);
+    const stored = this.#rounds.get(state.id);
+    if (!stored) throw new RoundNotFoundError(state.id);
+
+    state.prompts = stored.prompts;
+    state.votes = stored.votes;
+
     this.#rounds.set(state.id, this.#clone(state));
   }
 
@@ -32,18 +43,24 @@ export class InMemoryRoundGateway implements RoundGateway {
       if (existing !== prompt) {
         throw new Error(`Existing prompt mismatch for player ${playerId}`);
       }
-      return { count: Object.keys(state.prompts).length, inserted: false };
+      return {
+        inserted: false,
+        prompts: { ...state.prompts },
+      };
     }
 
     state.prompts[playerId] = prompt;
-    return { count: Object.keys(state.prompts).length, inserted: true };
+    return {
+      inserted: true,
+      prompts: { ...state.prompts },
+    };
   }
 
   async appendVote(
     roundId: RoundId,
     playerId: PlayerId,
     promptIndex: number,
-  ): Promise<number> {
+  ): Promise<VoteAppendResult> {
     const state = this.#rounds.get(roundId);
     if (!state) throw new RoundNotFoundError(roundId);
 
@@ -54,11 +71,17 @@ export class InMemoryRoundGateway implements RoundGateway {
       if (existing !== promptIndex) {
         throw new Error(`Existing vote mismatch for player ${playerId}`);
       }
-      return Object.keys(state.votes).length;
+      return {
+        inserted: false,
+        votes: { ...state.votes },
+      };
     }
 
     state.votes[playerId] = promptIndex;
-    return Object.keys(state.votes).length;
+    return {
+      inserted: true,
+      votes: { ...state.votes },
+    };
   }
 
   async countSubmittedPrompts(roundId: RoundId): Promise<number> {
@@ -85,6 +108,32 @@ export class InMemoryRoundGateway implements RoundGateway {
 
     this.#rounds.set(state.id, state);
     return this.#clone(state);
+  }
+
+  async scheduleTimeout(roundId: RoundId, phase: RoundPhase, at: TimePoint): Promise<void> {
+    if (!this.#rounds.has(roundId)) throw new RoundNotFoundError(roundId);
+    let timeouts = this.#timeouts.get(roundId);
+    if (!timeouts) {
+      timeouts = new Map();
+      this.#timeouts.set(roundId, timeouts);
+    }
+    timeouts.set(phase, at);
+  }
+
+  async shufflePrompts(
+    _roundId: RoundId,
+    prompts: readonly (readonly [PlayerId, string])[],
+  ): Promise<readonly (readonly [PlayerId, string])[]> {
+    const shuffled = prompts.map((entry) => [...entry] as [PlayerId, string]);
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+    }
+    return shuffled;
+  }
+
+  getScheduledTimeout(roundId: RoundId, phase: RoundPhase): TimePoint | undefined {
+    return this.#timeouts.get(roundId)?.get(phase);
   }
 
   #clone(state: RoundState): RoundState {

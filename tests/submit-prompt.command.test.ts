@@ -11,6 +11,7 @@ const makeGateway = () =>
     loadRoundState: vi.fn(),
     appendPrompt: vi.fn(),
     saveRoundState: vi.fn(),
+    scheduleTimeout: vi.fn(),
   }) satisfies Partial<RoundGateway>;
 
 const makeBus = () =>
@@ -43,7 +44,10 @@ describe("SubmitPrompt command", () => {
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
-    gateway.appendPrompt.mockResolvedValue({ count: 1, inserted: true });
+    gateway.appendPrompt.mockResolvedValue({
+      inserted: true,
+      prompts: { [round.activePlayer]: "real prompt" },
+    });
     imageGenerator.generate.mockResolvedValue("https://example.com/image.png");
 
     const command = new SubmitPrompt(round.id, round.activePlayer, "real prompt", now);
@@ -66,8 +70,12 @@ describe("SubmitPrompt command", () => {
         phase: "guessing",
         guessingDeadline,
         imageUrl: "https://example.com/image.png",
+        prompts: {
+          [round.activePlayer]: "real prompt",
+        },
       }),
     );
+    expect(gateway.scheduleTimeout).toHaveBeenCalledWith(round.id, "guessing", guessingDeadline);
     expect(bus.publish).toHaveBeenCalledTimes(2);
     expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
       type: "ImageGenerated",
@@ -151,7 +159,10 @@ describe("SubmitPrompt command", () => {
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
-    gateway.appendPrompt.mockResolvedValue({ count: 0, inserted: true });
+    gateway.appendPrompt.mockResolvedValue({
+      inserted: true,
+      prompts: {},
+    });
 
     const command = new SubmitPrompt(round.id, round.activePlayer, "real prompt", now);
 
@@ -217,7 +228,10 @@ describe("SubmitPrompt command", () => {
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
-    gateway.appendPrompt.mockResolvedValue({ count: 4, inserted: false });
+    gateway.appendPrompt.mockResolvedValue({
+      inserted: false,
+      prompts: { [round.activePlayer]: "real prompt" },
+    });
 
     const command = new SubmitPrompt(round.id, round.activePlayer, "real prompt", now);
     await command.execute({

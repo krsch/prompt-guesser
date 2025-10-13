@@ -28,13 +28,11 @@ describe("InMemoryRoundGateway", () => {
       promptDeadline: PROMPT_DEADLINE,
     });
 
-    expect(round.votes).toBeUndefined();
-
     const reloaded = await gateway.loadRoundState(round.id);
     expect(reloaded).toEqual(round);
   });
 
-  it("appends prompts atomically and returns the updated count per player", async () => {
+  it("appends prompts atomically and returns the updated snapshot", async () => {
     const gateway = new InMemoryRoundGateway();
     const { id } = await gateway.startNewRound(
       PLAYERS,
@@ -44,13 +42,22 @@ describe("InMemoryRoundGateway", () => {
     );
 
     const countAfterActive = await gateway.appendPrompt(id, ACTIVE, "real prompt");
-    expect(countAfterActive).toEqual({ count: 1, inserted: true });
+    expect(countAfterActive).toEqual({
+      inserted: true,
+      prompts: { [ACTIVE]: "real prompt" },
+    });
 
     const countAfterDuplicate = await gateway.appendPrompt(id, ACTIVE, "real prompt");
-    expect(countAfterDuplicate).toEqual({ count: 1, inserted: false });
+    expect(countAfterDuplicate).toEqual({
+      inserted: false,
+      prompts: { [ACTIVE]: "real prompt" },
+    });
 
     const countAfterDecoy = await gateway.appendPrompt(id, PLAYERS[1], "decoy");
-    expect(countAfterDecoy).toEqual({ count: 2, inserted: true });
+    expect(countAfterDecoy).toEqual({
+      inserted: true,
+      prompts: { [ACTIVE]: "real prompt", [PLAYERS[1]]: "decoy" },
+    });
 
     await expect(
       gateway.appendPrompt(id, PLAYERS[1], "better decoy"),
@@ -63,7 +70,7 @@ describe("InMemoryRoundGateway", () => {
     });
   });
 
-  it("appends votes atomically and returns the updated count per player", async () => {
+  it("appends votes atomically and returns the updated snapshot", async () => {
     const gateway = new InMemoryRoundGateway();
     const { id } = await gateway.startNewRound(
       PLAYERS,
@@ -73,13 +80,22 @@ describe("InMemoryRoundGateway", () => {
     );
 
     const firstVote = await gateway.appendVote(id, PLAYERS[1], 0);
-    expect(firstVote).toBe(1);
+    expect(firstVote).toEqual({
+      inserted: true,
+      votes: { [PLAYERS[1]]: 0 },
+    });
 
     const secondVote = await gateway.appendVote(id, PLAYERS[2], 2);
-    expect(secondVote).toBe(2);
+    expect(secondVote).toEqual({
+      inserted: true,
+      votes: { [PLAYERS[1]]: 0, [PLAYERS[2]]: 2 },
+    });
 
     const duplicate = await gateway.appendVote(id, PLAYERS[2], 2);
-    expect(duplicate).toBe(2);
+    expect(duplicate).toEqual({
+      inserted: false,
+      votes: { [PLAYERS[1]]: 0, [PLAYERS[2]]: 2 },
+    });
 
     await expect(gateway.appendVote(id, PLAYERS[2], 1)).rejects.toThrowError(/existing vote/i);
 
@@ -102,13 +118,23 @@ describe("InMemoryRoundGateway", () => {
     const updated = {
       ...state,
       phase: "guessing" as const,
-      prompts: { [ACTIVE]: "real" },
+      guessingDeadline: state.startedAt + 30_000,
+      shuffledPrompts: ["real"],
+      shuffledPromptOwners: [ACTIVE],
+      imageUrl: "https://example.com/image.png",
     };
 
     await gateway.saveRoundState(updated);
 
     const reloaded = await gateway.loadRoundState(state.id);
-    expect(reloaded).toEqual(updated);
+    expect(reloaded).toMatchObject({
+      phase: "guessing",
+      guessingDeadline: updated.guessingDeadline,
+      shuffledPrompts: ["real"],
+      shuffledPromptOwners: [ACTIVE],
+      imageUrl: "https://example.com/image.png",
+      prompts: {},
+    });
   });
 
   it("counts submitted prompts", async () => {
@@ -143,5 +169,15 @@ describe("InMemoryRoundGateway", () => {
         startedAt: START_AT,
       } as any),
     ).rejects.toThrowError();
+    await expect(gateway.scheduleTimeout("missing", "prompt", START_AT)).rejects.toThrowError();
+  });
+
+  it("records scheduled timeouts for inspection", async () => {
+    const gateway = new InMemoryRoundGateway();
+    const state = await gateway.startNewRound(PLAYERS, ACTIVE, START_AT, PROMPT_DEADLINE);
+
+    await gateway.scheduleTimeout(state.id, "prompt", PROMPT_DEADLINE);
+
+    expect(gateway.getScheduledTimeout(state.id, "prompt")).toBe(PROMPT_DEADLINE);
   });
 });

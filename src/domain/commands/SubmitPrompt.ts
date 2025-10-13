@@ -1,4 +1,5 @@
 import { Command, type CommandContext } from "./Command.js";
+import { transitionToGuessing } from "./PhaseTransitions.js";
 import type { PlayerId, RoundId, TimePoint } from "../typedefs.js";
 
 export class SubmitPrompt extends Command {
@@ -28,13 +29,13 @@ export class SubmitPrompt extends Command {
       throw new Error("Cannot submit prompt after the deadline has passed");
     }
 
-    const { count: promptCount, inserted } = await gateway.appendPrompt(
+    const { inserted, prompts } = await gateway.appendPrompt(
       this.roundId,
       this.playerId,
       this.prompt,
     );
 
-    if (promptCount <= 0) {
+    if (prompts[this.playerId] !== this.prompt) {
       throw new Error("Failed to persist active player's prompt");
     }
 
@@ -50,32 +51,26 @@ export class SubmitPrompt extends Command {
 
     const imageUrl = await imageGenerator.generate(this.prompt);
 
-    const guessingDeadline = this.at + config.guessingDurationMs;
+    state.prompts = prompts;
 
     await bus.publish(`round:${state.id}`, {
       type: "ImageGenerated",
       roundId: state.id,
       imageUrl,
-      guessingDeadline,
+      guessingDeadline: this.at + config.guessingDurationMs,
     });
-
-    state.phase = "guessing";
-    state.guessingDeadline = guessingDeadline;
-    state.imageUrl = imageUrl;
-
-    await gateway.saveRoundState(state);
 
     logger?.info?.("Prompt submitted", {
       type: this.type,
       roundId: state.id,
-      phase: state.phase,
       at: this.at,
     });
 
-    await bus.publish(`round:${state.id}`, {
-      type: "PhaseChanged",
-      phase: state.phase,
-      at: this.at,
+    await transitionToGuessing(state, this.at, imageUrl, {
+      gateway,
+      bus,
+      logger,
+      config,
     });
   }
 }

@@ -14,7 +14,7 @@ export class PhaseTimeout extends Command {
     super();
   }
 
-  async execute({ gateway, bus, config, logger }: CommandContext): Promise<void> {
+  async execute({ gateway, bus, config, logger, scheduler }: CommandContext): Promise<void> {
     const state = await gateway.loadRoundState(this.roundId);
 
     if (state.phase !== this.phase) {
@@ -22,28 +22,13 @@ export class PhaseTimeout extends Command {
     }
 
     if (this.phase === "prompt") {
-      const deadline = state.promptDeadline;
-      if (!deadline) {
-        return;
-      }
-
-      if (this.at < deadline) {
-        logger?.info?.("Prompt timeout triggered before deadline; rescheduling", {
-          type: this.type,
-          roundId: state.id,
-          at: this.at,
-        });
-        await gateway.scheduleTimeout(state.id, "prompt", deadline);
-        return;
-      }
-
       state.phase = "finished";
       state.finishedAt = this.at;
       state.scores = Object.fromEntries(state.players.map((playerId) => [playerId, 0] as const));
 
       await gateway.saveRoundState(state);
 
-      logger?.info?.("Prompt deadline missed; ending round", {
+      logger?.info?.("Prompt phase timed out; ending round", {
         type: this.type,
         roundId: state.id,
         at: this.at,
@@ -59,21 +44,6 @@ export class PhaseTimeout extends Command {
     }
 
     if (this.phase === "guessing") {
-      const deadline = state.guessingDeadline;
-      if (!deadline) {
-        return;
-      }
-
-      if (this.at < deadline) {
-        logger?.info?.("Guessing timeout triggered before deadline; rescheduling", {
-          type: this.type,
-          roundId: state.id,
-          at: this.at,
-        });
-        await gateway.scheduleTimeout(state.id, "guessing", deadline);
-        return;
-      }
-
       const prompts = state.prompts ?? {};
 
       await transitionToVoting(state, prompts, this.at, {
@@ -81,26 +51,12 @@ export class PhaseTimeout extends Command {
         bus,
         logger,
         config,
+        scheduler,
       });
       return;
     }
 
     if (this.phase === "voting") {
-      const deadline = state.votingDeadline;
-      if (!deadline) {
-        return;
-      }
-
-      if (this.at < deadline) {
-        logger?.info?.("Voting timeout triggered before deadline; rescheduling", {
-          type: this.type,
-          roundId: state.id,
-          at: this.at,
-        });
-        await gateway.scheduleTimeout(state.id, "voting", deadline);
-        return;
-      }
-
       await finalizeRound(state, this.at, gateway, bus, logger, this.type);
     }
   }

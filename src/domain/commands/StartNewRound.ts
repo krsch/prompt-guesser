@@ -23,21 +23,23 @@ export class StartNewRound extends Command {
     }
   }
 
-  async execute({ gateway, bus, logger, config }: CommandContext): Promise<void> {
+  async execute({ gateway, bus, logger, config, scheduler }: CommandContext): Promise<void> {
     const issues = StartNewRound.validateAgainstConfig(this.players, config);
     if (issues.length > 0) {
       throw StartNewRoundInputError.because(issues);
     }
 
-    const promptDeadline = this.at + config.promptDurationMs;
     const round = await gateway.startNewRound(
       [...this.players],
       this.activePlayer,
       this.at,
-      promptDeadline,
     );
 
-    await gateway.scheduleTimeout(round.id, "prompt", promptDeadline);
+    await scheduler.scheduleTimeout(
+      round.id,
+      "prompt",
+      config.promptDurationMs,
+    );
 
     logger?.info?.("Round started", {
       type: this.type,
@@ -51,7 +53,7 @@ export class StartNewRound extends Command {
       players: [...round.players],
       activePlayer: round.activePlayer,
       at: this.at,
-      promptDeadline,
+      promptDurationMs: config.promptDurationMs,
     });
   }
 

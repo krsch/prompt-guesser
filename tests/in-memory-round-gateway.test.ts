@@ -6,8 +6,6 @@ const PLAYERS = ["alice", "bob", "carol", "dave"];
 const ACTIVE = PLAYERS[0];
 
 const START_AT = Date.UTC(2024, 0, 1, 12, 0, 0);
-const PROMPT_DEADLINE = START_AT + 60_000;
-
 describe("InMemoryRoundGateway", () => {
   it("starts and persists a new round with initial state", async () => {
     const gateway = new InMemoryRoundGateway();
@@ -15,7 +13,6 @@ describe("InMemoryRoundGateway", () => {
       PLAYERS,
       ACTIVE,
       START_AT,
-      PROMPT_DEADLINE,
     );
 
     expect(round).toMatchObject({
@@ -25,7 +22,6 @@ describe("InMemoryRoundGateway", () => {
       phase: "prompt",
       startedAt: START_AT,
       prompts: {},
-      promptDeadline: PROMPT_DEADLINE,
     });
 
     const reloaded = await gateway.loadRoundState(round.id);
@@ -38,7 +34,6 @@ describe("InMemoryRoundGateway", () => {
       PLAYERS,
       ACTIVE,
       START_AT,
-      PROMPT_DEADLINE,
     );
 
     const countAfterActive = await gateway.appendPrompt(id, ACTIVE, "real prompt");
@@ -76,7 +71,6 @@ describe("InMemoryRoundGateway", () => {
       PLAYERS,
       ACTIVE,
       START_AT,
-      PROMPT_DEADLINE,
     );
 
     const firstVote = await gateway.appendVote(id, PLAYERS[1], 0);
@@ -112,13 +106,11 @@ describe("InMemoryRoundGateway", () => {
       PLAYERS,
       ACTIVE,
       START_AT,
-      PROMPT_DEADLINE,
     );
 
     const updated = {
       ...state,
       phase: "guessing" as const,
-      guessingDeadline: state.startedAt + 30_000,
       shuffledPrompts: ["real"],
       shuffledPromptOwners: [ACTIVE],
       imageUrl: "https://example.com/image.png",
@@ -129,7 +121,6 @@ describe("InMemoryRoundGateway", () => {
     const reloaded = await gateway.loadRoundState(state.id);
     expect(reloaded).toMatchObject({
       phase: "guessing",
-      guessingDeadline: updated.guessingDeadline,
       shuffledPrompts: ["real"],
       shuffledPromptOwners: [ACTIVE],
       imageUrl: "https://example.com/image.png",
@@ -143,7 +134,6 @@ describe("InMemoryRoundGateway", () => {
       PLAYERS,
       ACTIVE,
       START_AT,
-      PROMPT_DEADLINE,
     );
 
     expect(await gateway.countSubmittedPrompts(id)).toBe(0);
@@ -169,15 +159,5 @@ describe("InMemoryRoundGateway", () => {
         startedAt: START_AT,
       } as any),
     ).rejects.toThrowError();
-    await expect(gateway.scheduleTimeout("missing", "prompt", START_AT)).rejects.toThrowError();
-  });
-
-  it("records scheduled timeouts for inspection", async () => {
-    const gateway = new InMemoryRoundGateway();
-    const state = await gateway.startNewRound(PLAYERS, ACTIVE, START_AT, PROMPT_DEADLINE);
-
-    await gateway.scheduleTimeout(state.id, "prompt", PROMPT_DEADLINE);
-
-    expect(gateway.getScheduledTimeout(state.id, "prompt")).toBe(PROMPT_DEADLINE);
   });
 });

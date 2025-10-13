@@ -4,6 +4,7 @@ import { SubmitPrompt } from "../src/domain/commands/SubmitPrompt";
 import type { RoundGateway, RoundState } from "../src/domain/ports/RoundGateway";
 import type { MessageBus } from "../src/domain/ports/MessageBus";
 import type { ImageGenerator } from "../src/domain/ports/ImageGenerator";
+import type { Scheduler } from "../src/domain/ports/Scheduler";
 import { GameConfig } from "../src/domain/GameConfig";
 
 const makeGateway = () =>
@@ -11,7 +12,6 @@ const makeGateway = () =>
     loadRoundState: vi.fn(),
     appendPrompt: vi.fn(),
     saveRoundState: vi.fn(),
-    scheduleTimeout: vi.fn(),
   }) satisfies Partial<RoundGateway>;
 
 const makeBus = () =>
@@ -24,6 +24,11 @@ const makeImageGenerator = () =>
     generate: vi.fn(),
   }) satisfies Partial<ImageGenerator>;
 
+const makeScheduler = () =>
+  ({
+    scheduleTimeout: vi.fn(),
+  }) satisfies Partial<Scheduler>;
+
 const makeConfig = () =>
   GameConfig.withDefaults();
 
@@ -33,6 +38,7 @@ describe("SubmitPrompt command", () => {
     const bus = makeBus();
     const imageGenerator = makeImageGenerator();
     const config = makeConfig();
+    const scheduler = makeScheduler();
     const now = Date.now();
     const round: RoundState = {
       id: "round-123",
@@ -40,7 +46,6 @@ describe("SubmitPrompt command", () => {
       activePlayer: "p1",
       phase: "prompt",
       startedAt: now - 1000,
-      promptDeadline: now + 1000,
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
@@ -56,9 +61,8 @@ describe("SubmitPrompt command", () => {
       bus: bus as MessageBus,
       imageGenerator: imageGenerator as ImageGenerator,
       config,
+      scheduler: scheduler as Scheduler,
     });
-
-    const guessingDeadline = now + config.guessingDurationMs;
 
     expect(gateway.loadRoundState).toHaveBeenCalledWith(round.id);
     expect(gateway.appendPrompt).toHaveBeenCalledWith(round.id, round.activePlayer, "real prompt");
@@ -68,32 +72,36 @@ describe("SubmitPrompt command", () => {
       expect.objectContaining({
         id: round.id,
         phase: "guessing",
-        guessingDeadline,
         imageUrl: "https://example.com/image.png",
         prompts: {
           [round.activePlayer]: "real prompt",
         },
       }),
     );
-    expect(gateway.scheduleTimeout).toHaveBeenCalledWith(round.id, "guessing", guessingDeadline);
     expect(bus.publish).toHaveBeenCalledTimes(2);
     expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
       type: "ImageGenerated",
       roundId: round.id,
       imageUrl: "https://example.com/image.png",
-      guessingDeadline,
+      guessingDurationMs: config.guessingDurationMs,
     });
     expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
       type: "PhaseChanged",
       phase: "guessing",
       at: now,
     });
+    expect(scheduler.scheduleTimeout).toHaveBeenCalledWith(
+      round.id,
+      "guessing",
+      config.guessingDurationMs,
+    );
   });
 
   it("throws when the round is not in the prompt phase", async () => {
     const gateway = makeGateway();
     const bus = makeBus();
     const config = makeConfig();
+    const scheduler = makeScheduler();
     const now = Date.now();
     const round: RoundState = {
       id: "round-123",
@@ -113,6 +121,7 @@ describe("SubmitPrompt command", () => {
         bus: bus as MessageBus,
         imageGenerator: makeImageGenerator() as ImageGenerator,
         config,
+        scheduler: scheduler as Scheduler,
       }),
     ).rejects.toThrow(/prompt phase/);
   });
@@ -121,6 +130,7 @@ describe("SubmitPrompt command", () => {
     const gateway = makeGateway();
     const bus = makeBus();
     const config = makeConfig();
+    const scheduler = makeScheduler();
     const now = Date.now();
     const round: RoundState = {
       id: "round-123",
@@ -140,6 +150,7 @@ describe("SubmitPrompt command", () => {
         bus: bus as MessageBus,
         imageGenerator: makeImageGenerator() as ImageGenerator,
         config,
+        scheduler: scheduler as Scheduler,
       }),
     ).rejects.toThrow(/active player/);
   });
@@ -149,6 +160,7 @@ describe("SubmitPrompt command", () => {
     const bus = makeBus();
     const imageGenerator = makeImageGenerator();
     const config = makeConfig();
+    const scheduler = makeScheduler();
     const now = Date.now();
     const round: RoundState = {
       id: "round-123",
@@ -172,41 +184,9 @@ describe("SubmitPrompt command", () => {
         bus: bus as MessageBus,
         imageGenerator: imageGenerator as ImageGenerator,
         config,
+        scheduler: scheduler as Scheduler,
       }),
     ).rejects.toThrow(/persist/);
-    expect(imageGenerator.generate).not.toHaveBeenCalled();
-    expect(gateway.saveRoundState).not.toHaveBeenCalled();
-    expect(bus.publish).not.toHaveBeenCalled();
-  });
-
-  it("throws if the prompt is submitted after the deadline", async () => {
-    const gateway = makeGateway();
-    const bus = makeBus();
-    const imageGenerator = makeImageGenerator();
-    const config = makeConfig();
-    const now = Date.now();
-    const round: RoundState = {
-      id: "round-123",
-      players: ["p1", "p2", "p3", "p4"],
-      activePlayer: "p1",
-      phase: "prompt",
-      startedAt: now - 10_000,
-      promptDeadline: now,
-    };
-
-    gateway.loadRoundState.mockResolvedValue(round);
-
-    const command = new SubmitPrompt(round.id, round.activePlayer, "real prompt", now);
-
-    await expect(
-      command.execute({
-        gateway: gateway as RoundGateway,
-        bus: bus as MessageBus,
-        imageGenerator: imageGenerator as ImageGenerator,
-        config,
-      }),
-    ).rejects.toThrow(/deadline/);
-    expect(gateway.appendPrompt).not.toHaveBeenCalled();
     expect(imageGenerator.generate).not.toHaveBeenCalled();
     expect(gateway.saveRoundState).not.toHaveBeenCalled();
     expect(bus.publish).not.toHaveBeenCalled();
@@ -217,6 +197,7 @@ describe("SubmitPrompt command", () => {
     const bus = makeBus();
     const imageGenerator = makeImageGenerator();
     const config = makeConfig();
+    const scheduler = makeScheduler();
     const now = Date.now();
     const round: RoundState = {
       id: "round-123",
@@ -224,7 +205,6 @@ describe("SubmitPrompt command", () => {
       activePlayer: "p1",
       phase: "prompt",
       startedAt: now - 1000,
-      promptDeadline: now + 1000,
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
@@ -239,6 +219,7 @@ describe("SubmitPrompt command", () => {
       bus: bus as MessageBus,
       imageGenerator: imageGenerator as ImageGenerator,
       config,
+      scheduler: scheduler as Scheduler,
     });
 
     expect(imageGenerator.generate).not.toHaveBeenCalled();

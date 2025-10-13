@@ -28,9 +28,6 @@ const baseRound = (overrides: Partial<RoundState> = {}): RoundState => ({
   activePlayer: PLAYERS[0],
   phase: "voting",
   startedAt: Date.now() - 10_000,
-  promptDeadline: Date.now() - 8_000,
-  guessingDeadline: Date.now() - 4_000,
-  votingDeadline: Date.now() + 5_000,
   prompts: {
     [PLAYERS[0]]: "real prompt",
     [PLAYERS[1]]: "blue decoy",
@@ -225,22 +222,4 @@ describe("SubmitVote command", () => {
     ).rejects.toThrow(/part of this round/);
   });
 
-  it("throws when the voting deadline has passed", async () => {
-    const gateway = makeGateway();
-    const config = makeConfig();
-    const round = baseRound({ votingDeadline: Date.now() });
-
-    gateway.loadRoundState.mockResolvedValue(round);
-
-    const command = new SubmitVote(round.id, PLAYERS[1], 1, round.votingDeadline!);
-
-    await expect(
-      command.execute({
-        gateway: gateway as RoundGateway,
-        bus: makeBus() as MessageBus,
-        imageGenerator: { generate: vi.fn() } as any,
-        config,
-      }),
-    ).rejects.toThrow(/deadline/);
-  });
 });

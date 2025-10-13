@@ -37,10 +37,6 @@ export class SubmitVote extends Command {
       throw new Error("Invalid vote index");
     }
 
-    if (state.votingDeadline && this.at >= state.votingDeadline) {
-      throw new Error("Cannot submit vote after the deadline has passed");
-    }
-
     const { inserted, votes } = await gateway.appendVote(
       this.roundId,
       this.playerId,

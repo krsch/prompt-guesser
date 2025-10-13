@@ -82,7 +82,7 @@ export interface RoundGateway {
    * Implementations may use optimistic concurrency or diff-based merging.
    * Intended for phase transitions and finalization.
    */
-  saveRoundState(state: RoundState): Promise<void>;
+  saveRoundState(state: RoundState, at: TimePoint): Promise<void>;
 
   /**
    * Append or update a player's prompt (real or decoy) atomically.
@@ -91,7 +91,8 @@ export interface RoundGateway {
   appendPrompt(
     roundId: RoundId,
     playerId: PlayerId,
-    prompt: string
+    prompt: string,
+    at: TimePoint
   ): Promise<number>;
 
   /**
@@ -101,7 +102,8 @@ export interface RoundGateway {
   appendVote(
     roundId: RoundId,
     playerId: PlayerId,
-    promptIndex: number
+    promptIndex: number,
+    at: TimePoint
   ): Promise<number>;
 
   /**
@@ -116,6 +118,8 @@ export interface RoundGateway {
    */
   startNewRound(
     players: PlayerId[],
-    activePlayer: PlayerId
+    activePlayer: PlayerId,
+    promptDeadline: TimePoint,
+    at: TimePoint
   ): Promise<RoundState>;
 }

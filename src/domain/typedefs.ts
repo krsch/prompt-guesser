@@ -21,3 +21,13 @@ export type RoundPhase =
   | "scoring"
   | "finished";
 
+/** Configuration that defines the rules and pacing of the game */
+export interface GameConfig {
+  /** Minimum number of players required to start a round */
+  minPlayers: number;
+  /** Maximum number of players allowed in a round */
+  maxPlayers: number;
+  /** How long players have to submit prompts once the round begins */
+  promptDurationMs: number;
+}
+

@@ -13,6 +13,7 @@ export class StartNewRound extends Command {
   constructor(
     public readonly players: readonly PlayerId[],
     public readonly activePlayer: PlayerId,
+    public readonly promptDeadline: TimePoint,
     public readonly at: TimePoint,
   ) {
     super();
@@ -29,7 +30,12 @@ export class StartNewRound extends Command {
       throw StartNewRoundInputError.because(issues);
     }
 
-    const round = await gateway.startNewRound([...this.players], this.activePlayer);
+    const round = await gateway.startNewRound(
+      [...this.players],
+      this.activePlayer,
+      this.promptDeadline,
+      this.at,
+    );
 
     const promptDeadline = this.at + config.promptDurationMs;
     round.promptDeadline = promptDeadline;

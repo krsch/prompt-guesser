@@ -95,14 +95,19 @@ export interface PromptAppendResult {
 
 export interface RoundGateway {
   loadRoundState(roundId: RoundId): Promise<RoundState>;
-  saveRoundState(state: RoundState): Promise<void>; // adapters choose optimistic or diff-merge
+  saveRoundState(state: RoundState, at: TimePoint): Promise<void>; // adapters choose optimistic or diff-merge
 
   // Atomic mutations that return updated counts to avoid update-then-read
-  appendPrompt(roundId: RoundId, playerId: PlayerId, prompt: string): Promise<PromptAppendResult>;
-  appendVote(roundId: RoundId, playerId: PlayerId, promptIndex: number): Promise<number>;
+  appendPrompt(roundId: RoundId, playerId: PlayerId, prompt: string, at: TimePoint): Promise<PromptAppendResult>;
+  appendVote(roundId: RoundId, playerId: PlayerId, promptIndex: number, at: TimePoint): Promise<number>;
   countSubmittedPrompts(roundId: RoundId): Promise<number>;
 
-  startNewRound(players: PlayerId[], activePlayer: PlayerId): Promise<RoundState>;
+  startNewRound(
+    players: PlayerId[],
+    activePlayer: PlayerId,
+    promptDeadline: TimePoint,
+    at: TimePoint
+  ): Promise<RoundState>;
 }
 ```
 
@@ -213,7 +218,7 @@ export class SubmitPrompt extends Command {
       this.roundId,
       this.playerId,
       this.prompt,
-    );
+      this.at);
 
     if (!inserted) return; // already persisted elsewhere; idempotent command
 
@@ -221,7 +226,7 @@ export class SubmitPrompt extends Command {
     if (promptCount >= 1) {
       state.phase = "guessing";
       // guessingDeadline should already be set at round creation; keep it as-is
-      await gateway.saveRoundState(state);
+      await gateway.saveRoundState(state, this.at);
       await bus.publish(`round:${state.id}`, { type: "PhaseChanged", phase: state.phase, at: this.at });
     }
   }
@@ -250,7 +255,7 @@ export class SubmitDecoy extends Command {
       this.roundId,
       this.playerId,
       this.prompt,
-    );
+      this.at);
     if (!inserted) return; // ignore duplicate decoys
 
     const required = state.players.length - 1; // everyone except active player
@@ -268,7 +273,7 @@ export class SubmitDecoy extends Command {
       state.prompts = prompts;
       state.shuffledPrompts = all.sort(() => Math.random() - 0.5);
       state.phase = "voting";
-      await gateway.saveRoundState(state);
+      await gateway.saveRoundState(state, this.at);
       await bus.publish(`round:${state.id}`, { type: "PhaseChanged", phase: state.phase, at: this.at });
     }
   }
@@ -294,7 +299,7 @@ export class SubmitVote extends Command {
       throw new Error("Invalid vote index");
     if (state.votingDeadline && this.at > state.votingDeadline) throw new Error("Voting deadline passed");
 
-    const votes = await gateway.appendVote(this.roundId, this.playerId, this.promptIndex);
+    const votes = await gateway.appendVote(this.roundId, this.playerId, this.promptIndex, this.at);
 
     const allVoted = votes >= state.players.length;
     const timedOut = !!state.votingDeadline && this.at >= state.votingDeadline;
@@ -307,13 +312,13 @@ export class SubmitVote extends Command {
 
       state.scores = scores;
       state.phase = "scoring";
-      await gateway.saveRoundState(state);
+      await gateway.saveRoundState(state, this.at);
       await bus.publish(`round:${state.id}`, { type: "PhaseChanged", phase: state.phase, at: this.at });
 
       // Optionally finalize
       state.phase = "finished";
       state.finishedAt = this.at;
-      await gateway.saveRoundState(state);
+      await gateway.saveRoundState(state, this.at);
       await bus.publish(`round:${state.id}`, { type: "RoundFinished", at: this.at, scores: state.scores });
     }
   }
@@ -348,7 +353,7 @@ export class PhaseTimeout extends Command {
       return; // deadline not actually expired
     }
 
-    await gateway.saveRoundState(state);
+    await gateway.saveRoundState(state, this.at);
     await bus.publish(`round:${state.id}`, { type: "PhaseChanged", phase: state.phase, at: this.at });
   }
 }

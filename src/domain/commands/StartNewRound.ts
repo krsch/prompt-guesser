@@ -37,6 +37,8 @@ export class StartNewRound extends Command {
       promptDeadline,
     );
 
+    await gateway.scheduleTimeout(round.id, "prompt", promptDeadline);
+
     logger?.info?.("Round started", {
       type: this.type,
       roundId: round.id,

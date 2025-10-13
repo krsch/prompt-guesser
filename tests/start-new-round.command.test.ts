@@ -11,6 +11,7 @@ const makeGateway = () =>
   ({
     startNewRound: vi.fn(),
     saveRoundState: vi.fn(),
+    scheduleTimeout: vi.fn(),
   }) satisfies Partial<RoundGateway>;
 
 const makeBus = () =>
@@ -59,6 +60,11 @@ describe("StartNewRound command", () => {
       now + config.promptDurationMs,
     );
     expect(gateway.saveRoundState).not.toHaveBeenCalled();
+    expect(gateway.scheduleTimeout).toHaveBeenCalledWith(
+      "round-1",
+      "prompt",
+      now + config.promptDurationMs,
+    );
     expect(bus.publish).toHaveBeenCalledWith("round:round-1", {
       type: "RoundStarted",
       roundId: "round-1",

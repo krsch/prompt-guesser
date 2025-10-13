@@ -86,6 +86,11 @@ export interface RoundState {
 }
 ```
 
+The optional `imageUrl` is populated once the real prompt has been accepted and
+an image has been generated for the round. Before the guessing phase begins the
+field will be `undefined`, allowing adapters to distinguish rounds that have
+not yet produced a shareable image.
+
 ### 3.3 RoundGateway (persistence boundary)
 
 ```ts

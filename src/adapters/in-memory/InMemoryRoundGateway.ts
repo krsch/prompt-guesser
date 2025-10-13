@@ -1,4 +1,4 @@
-import { RoundNotFoundError } from "../../domain/errors/RoundNotFoundError.js";
+import { RoundNotFoundError } from "../../domain/errors/index.js";
 import type { PromptAppendResult, RoundGateway, RoundState } from "../../domain/ports/RoundGateway.js";
 import type { PlayerId, RoundId, TimePoint } from "../../domain/typedefs.js";
 

@@ -40,6 +40,7 @@ describe("StartNewRound command", () => {
       activePlayer,
       phase: "prompt",
       startedAt: now,
+      promptDeadline: now + config.promptDurationMs,
     };
     gateway.startNewRound.mockResolvedValue(roundState);
 
@@ -51,13 +52,13 @@ describe("StartNewRound command", () => {
       config,
     });
 
-    expect(gateway.startNewRound).toHaveBeenCalledWith(players, activePlayer);
-    expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
-    expect(gateway.saveRoundState).toHaveBeenCalledWith(
-      expect.objectContaining({
-        promptDeadline: now + config.promptDurationMs,
-      }),
+    expect(gateway.startNewRound).toHaveBeenCalledWith(
+      players,
+      activePlayer,
+      now,
+      now + config.promptDurationMs,
     );
+    expect(gateway.saveRoundState).not.toHaveBeenCalled();
     expect(bus.publish).toHaveBeenCalledWith("round:round-1", {
       type: "RoundStarted",
       roundId: "round-1",

@@ -103,7 +103,12 @@ export interface RoundGateway {
   appendVote(roundId: RoundId, playerId: PlayerId, promptIndex: number): Promise<number>;
   countSubmittedPrompts(roundId: RoundId): Promise<number>;
 
-  startNewRound(players: PlayerId[], activePlayer: PlayerId): Promise<RoundState>;
+  startNewRound(
+    players: PlayerId[],
+    activePlayer: PlayerId,
+    startedAt: TimePoint,
+    promptDeadline: TimePoint,
+  ): Promise<RoundState>;
 }
 ```
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { InMemoryRoundGateway } from "../src/adapters/in-memory/InMemoryRoundGateway.js";
 
@@ -6,20 +6,17 @@ const PLAYERS = ["alice", "bob", "carol", "dave"];
 const ACTIVE = PLAYERS[0];
 
 const START_AT = Date.UTC(2024, 0, 1, 12, 0, 0);
+const PROMPT_DEADLINE = START_AT + 60_000;
 
 describe("InMemoryRoundGateway", () => {
   it("starts and persists a new round with initial state", async () => {
     const gateway = new InMemoryRoundGateway();
-    vi.useFakeTimers();
-    let state: Awaited<ReturnType<InMemoryRoundGateway["startNewRound"]>> | undefined;
-    try {
-      vi.setSystemTime(new Date(START_AT));
-      state = await gateway.startNewRound(PLAYERS, ACTIVE);
-    } finally {
-      vi.useRealTimers();
-    }
-
-    const round = state!;
+    const round = await gateway.startNewRound(
+      PLAYERS,
+      ACTIVE,
+      START_AT,
+      PROMPT_DEADLINE,
+    );
 
     expect(round).toMatchObject({
       id: expect.stringMatching(/^round-/),
@@ -28,9 +25,8 @@ describe("InMemoryRoundGateway", () => {
       phase: "prompt",
       startedAt: START_AT,
       prompts: {},
+      promptDeadline: PROMPT_DEADLINE,
     });
-
-    expect(round.promptDeadline).toBeUndefined();
 
     expect(round.votes).toBeUndefined();
 
@@ -40,7 +36,12 @@ describe("InMemoryRoundGateway", () => {
 
   it("appends prompts atomically and returns the updated count per player", async () => {
     const gateway = new InMemoryRoundGateway();
-    const { id } = await gateway.startNewRound(PLAYERS, ACTIVE);
+    const { id } = await gateway.startNewRound(
+      PLAYERS,
+      ACTIVE,
+      START_AT,
+      PROMPT_DEADLINE,
+    );
 
     const countAfterActive = await gateway.appendPrompt(id, ACTIVE, "real prompt");
     expect(countAfterActive).toEqual({ count: 1, inserted: true });
@@ -64,7 +65,12 @@ describe("InMemoryRoundGateway", () => {
 
   it("appends votes atomically and returns the updated count per player", async () => {
     const gateway = new InMemoryRoundGateway();
-    const { id } = await gateway.startNewRound(PLAYERS, ACTIVE);
+    const { id } = await gateway.startNewRound(
+      PLAYERS,
+      ACTIVE,
+      START_AT,
+      PROMPT_DEADLINE,
+    );
 
     const firstVote = await gateway.appendVote(id, PLAYERS[1], 0);
     expect(firstVote).toBe(1);
@@ -86,7 +92,12 @@ describe("InMemoryRoundGateway", () => {
 
   it("saves full round state snapshots", async () => {
     const gateway = new InMemoryRoundGateway();
-    const state = await gateway.startNewRound(PLAYERS, ACTIVE);
+    const state = await gateway.startNewRound(
+      PLAYERS,
+      ACTIVE,
+      START_AT,
+      PROMPT_DEADLINE,
+    );
 
     const updated = {
       ...state,
@@ -102,7 +113,12 @@ describe("InMemoryRoundGateway", () => {
 
   it("counts submitted prompts", async () => {
     const gateway = new InMemoryRoundGateway();
-    const { id } = await gateway.startNewRound(PLAYERS, ACTIVE);
+    const { id } = await gateway.startNewRound(
+      PLAYERS,
+      ACTIVE,
+      START_AT,
+      PROMPT_DEADLINE,
+    );
 
     expect(await gateway.countSubmittedPrompts(id)).toBe(0);
 

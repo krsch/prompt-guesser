@@ -29,12 +29,13 @@ export class StartNewRound extends Command {
       throw StartNewRoundInputError.because(issues);
     }
 
-    const round = await gateway.startNewRound([...this.players], this.activePlayer);
-
     const promptDeadline = this.at + config.promptDurationMs;
-    round.promptDeadline = promptDeadline;
-
-    await gateway.saveRoundState(round);
+    const round = await gateway.startNewRound(
+      [...this.players],
+      this.activePlayer,
+      this.at,
+      promptDeadline,
+    );
 
     logger?.info?.("Round started", {
       type: this.type,

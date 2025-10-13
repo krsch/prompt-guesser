@@ -70,8 +70,9 @@ export class InMemoryRoundGateway implements RoundGateway {
   async startNewRound(
     players: PlayerId[],
     activePlayer: PlayerId,
+    startedAt: TimePoint,
+    promptDeadline: TimePoint,
   ): Promise<RoundState> {
-    const startedAt: TimePoint = Date.now();
     const state: RoundState = {
       id: `round-${this.#nextId++}`,
       players: [...players],
@@ -79,6 +80,7 @@ export class InMemoryRoundGateway implements RoundGateway {
       phase: "prompt",
       prompts: {},
       startedAt,
+      promptDeadline,
     };
 
     this.#rounds.set(state.id, state);

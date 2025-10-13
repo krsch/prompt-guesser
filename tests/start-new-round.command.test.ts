@@ -5,6 +5,7 @@ import { StartNewRoundInputError } from "../src/domain/errors/StartNewRoundInput
 import type { RoundGateway } from "../src/domain/ports/RoundGateway";
 import type { MessageBus } from "../src/domain/ports/MessageBus";
 import { GameConfig } from "../src/domain/GameConfig";
+import type { ImageGenerator } from "../src/domain/ports/ImageGenerator";
 
 const makeGateway = () =>
   ({
@@ -17,6 +18,11 @@ const makeBus = () =>
     publish: vi.fn(),
   }) satisfies Partial<MessageBus>;
 
+const makeImageGenerator = () =>
+  ({
+    generate: vi.fn(),
+  }) satisfies Partial<ImageGenerator>;
+
 const makeConfig = () => GameConfig.withDefaults();
 
 describe("StartNewRound command", () => {
@@ -25,7 +31,6 @@ describe("StartNewRound command", () => {
     const bus = makeBus();
     const config = makeConfig();
     const now = Date.now();
-    const promptDeadline = now + 60_000;
     const players = ["p1", "p2", "p3", "p4"];
     const activePlayer = players[0];
 
@@ -35,18 +40,18 @@ describe("StartNewRound command", () => {
       activePlayer,
       phase: "prompt",
       startedAt: now,
-      promptDeadline,
     };
     gateway.startNewRound.mockResolvedValue(roundState);
 
-    const command = new StartNewRound(players, activePlayer, promptDeadline, now);
+    const command = new StartNewRound(players, activePlayer, now);
     await command.execute({
       gateway: gateway as RoundGateway,
       bus: bus as MessageBus,
+      imageGenerator: makeImageGenerator() as ImageGenerator,
       config,
     });
 
-    expect(gateway.startNewRound).toHaveBeenCalledWith(players, activePlayer, promptDeadline, now);
+    expect(gateway.startNewRound).toHaveBeenCalledWith(players, activePlayer);
     expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
     expect(gateway.saveRoundState).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -64,13 +69,13 @@ describe("StartNewRound command", () => {
   });
 
   it("throws when player count is below the minimum", async () => {
-    const now = Date.now();
-    const command = new StartNewRound(["p1", "p2", "p3"], "p1", now + 60_000, now);
+    const command = new StartNewRound(["p1", "p2", "p3"], "p1", Date.now());
     const gateway = makeGateway();
     await expect(
       command.execute({
         gateway: gateway as RoundGateway,
         bus: makeBus() as MessageBus,
+        imageGenerator: makeImageGenerator() as ImageGenerator,
         config: makeConfig(),
       }),
     ).rejects.toThrow(StartNewRoundInputError);
@@ -80,13 +85,13 @@ describe("StartNewRound command", () => {
 
   it("throws when player count is above the maximum", async () => {
     const players = ["p1", "p2", "p3", "p4", "p5", "p6", "p7"];
-    const now = Date.now();
-    const command = new StartNewRound(players, "p1", now + 60_000, now);
+    const command = new StartNewRound(players, "p1", Date.now());
     const gateway = makeGateway();
     await expect(
       command.execute({
         gateway: gateway as RoundGateway,
         bus: makeBus() as MessageBus,
+        imageGenerator: makeImageGenerator() as ImageGenerator,
         config: makeConfig(),
       }),
     ).rejects.toThrow(StartNewRoundInputError);
@@ -96,22 +101,19 @@ describe("StartNewRound command", () => {
 
   it("throws when the active player is not part of the round", async () => {
     const players = ["p1", "p2", "p3", "p4"];
-    const now = Date.now();
-    expect(() => new StartNewRound(players, "p5", now + 60_000, now)).toThrow(StartNewRoundInputError);
+    expect(() => new StartNewRound(players, "p5", Date.now())).toThrow(StartNewRoundInputError);
   });
 
   it("throws when players contain duplicates", () => {
     const players = ["p1", "p1", "p2", "p3"];
-    const now = Date.now();
-    expect(() => new StartNewRound(players, "p1", now + 60_000, now)).toThrow(StartNewRoundInputError);
+    expect(() => new StartNewRound(players, "p1", Date.now())).toThrow(StartNewRoundInputError);
   });
 
   it("throws when player identifiers contain whitespace", () => {
-    const now = Date.now();
-    expect(() => new StartNewRound(["p 1", "p2", "p3", "p4"], "p2", now + 60_000, now)).toThrow(
+    expect(() => new StartNewRound(["p 1", "p2", "p3", "p4"], "p2", Date.now())).toThrow(
       StartNewRoundInputError,
     );
-    expect(() => new StartNewRound(["p1", "p2", "p3", "p4"], "p 2", now + 60_000, now)).toThrow(
+    expect(() => new StartNewRound(["p1", "p2", "p3", "p4"], "p 2", Date.now())).toThrow(
       StartNewRoundInputError,
     );
   });

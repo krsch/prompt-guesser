@@ -1,5 +1,5 @@
 import { RoundNotFoundError } from "../../domain/errors/RoundNotFoundError.js";
-import type { RoundGateway, RoundState } from "../../domain/ports/RoundGateway.js";
+import type { PromptAppendResult, RoundGateway, RoundState } from "../../domain/ports/RoundGateway.js";
 import type { PlayerId, RoundId, TimePoint } from "../../domain/typedefs.js";
 
 export class InMemoryRoundGateway implements RoundGateway {
@@ -12,7 +12,7 @@ export class InMemoryRoundGateway implements RoundGateway {
     return this.#clone(state);
   }
 
-  async saveRoundState(state: RoundState, _at: TimePoint): Promise<void> {
+  async saveRoundState(state: RoundState): Promise<void> {
     if (!this.#rounds.has(state.id)) throw new RoundNotFoundError(state.id);
     this.#rounds.set(state.id, this.#clone(state));
   }
@@ -21,8 +21,7 @@ export class InMemoryRoundGateway implements RoundGateway {
     roundId: RoundId,
     playerId: PlayerId,
     prompt: string,
-    _at: TimePoint,
-  ): Promise<number> {
+  ): Promise<PromptAppendResult> {
     const state = this.#rounds.get(roundId);
     if (!state) throw new RoundNotFoundError(roundId);
 
@@ -33,18 +32,17 @@ export class InMemoryRoundGateway implements RoundGateway {
       if (existing !== prompt) {
         throw new Error(`Existing prompt mismatch for player ${playerId}`);
       }
-      return Object.keys(state.prompts).length;
+      return { count: Object.keys(state.prompts).length, inserted: false };
     }
 
     state.prompts[playerId] = prompt;
-    return Object.keys(state.prompts).length;
+    return { count: Object.keys(state.prompts).length, inserted: true };
   }
 
   async appendVote(
     roundId: RoundId,
     playerId: PlayerId,
     promptIndex: number,
-    _at: TimePoint,
   ): Promise<number> {
     const state = this.#rounds.get(roundId);
     if (!state) throw new RoundNotFoundError(roundId);
@@ -72,17 +70,15 @@ export class InMemoryRoundGateway implements RoundGateway {
   async startNewRound(
     players: PlayerId[],
     activePlayer: PlayerId,
-    promptDeadline: TimePoint,
-    at: TimePoint,
   ): Promise<RoundState> {
+    const startedAt: TimePoint = Date.now();
     const state: RoundState = {
       id: `round-${this.#nextId++}`,
       players: [...players],
       activePlayer,
       phase: "prompt",
       prompts: {},
-      promptDeadline,
-      startedAt: at,
+      startedAt,
     };
 
     this.#rounds.set(state.id, state);

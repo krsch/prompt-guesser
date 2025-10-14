@@ -7,12 +7,6 @@ type PhaseTransitionContext = Pick<
   "gateway" | "bus" | "logger" | "config" | "scheduler"
 >;
 
-function assertPromptValue(playerId: PlayerId, prompt: unknown): asserts prompt is string {
-  if (typeof prompt !== "string") {
-    throw new Error(`Prompt for player ${playerId} is not a string`);
-  }
-}
-
 export async function transitionToGuessing(
   state: RoundState,
   at: TimePoint,
@@ -45,34 +39,11 @@ export async function transitionToVoting(
   at: TimePoint,
   { gateway, bus, logger, config, scheduler }: PhaseTransitionContext,
 ): Promise<void> {
-  const promptEntries = Object.entries(prompts) as [PlayerId, unknown][];
+  const promptEntries = Object.entries(prompts) as [PlayerId, string][];
 
-  if (promptEntries.length === 0) {
-    throw new Error("Cannot transition to voting without any prompts");
-  }
+  const shuffled = await gateway.shufflePrompts(state.id, promptEntries);
 
-  if (!(state.activePlayer in prompts)) {
-    throw new Error("Active player's prompt missing when transitioning to voting");
-  }
-
-  const typedEntries = promptEntries.map(([playerId, value]) => {
-    assertPromptValue(playerId, value);
-    if (!state.players.includes(playerId)) {
-      throw new Error(`Prompt submitted by unknown player ${playerId}`);
-    }
-    return [playerId, value] as [PlayerId, string];
-  });
-
-  const shuffled = await gateway.shufflePrompts(state.id, typedEntries);
-
-  if (shuffled.length !== typedEntries.length) {
-    throw new Error("Shuffled prompt count does not match inputs");
-  }
-
-  const shuffledPrompts = shuffled.map(([playerId, prompt]) => {
-    assertPromptValue(playerId, prompt);
-    return prompt;
-  });
+  const shuffledPrompts = shuffled.map(([, prompt]) => prompt);
   const shuffledPromptOwners = shuffled.map(([playerId]) => playerId);
 
   state.prompts = { ...prompts };

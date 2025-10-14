@@ -14,7 +14,7 @@ export class SubmitDecoy extends Command {
     super();
   }
 
-  async execute({ gateway, bus, config, logger }: CommandContext): Promise<void> {
+  async execute({ gateway, bus, config, logger, scheduler }: CommandContext): Promise<void> {
     const state = await gateway.loadRoundState(this.roundId);
 
     if (state.phase !== "guessing") {
@@ -27,10 +27,6 @@ export class SubmitDecoy extends Command {
 
     if (state.activePlayer === this.playerId) {
       throw new Error("Active player cannot submit a decoy prompt");
-    }
-
-    if (state.guessingDeadline && this.at >= state.guessingDeadline) {
-      throw new Error("Cannot submit decoy after the deadline has passed");
     }
 
     const { inserted, prompts } = await gateway.appendPrompt(
@@ -66,6 +62,7 @@ export class SubmitDecoy extends Command {
       bus,
       logger,
       config,
+      scheduler,
     });
   }
 }

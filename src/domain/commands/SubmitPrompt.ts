@@ -14,7 +14,7 @@ export class SubmitPrompt extends Command {
     super();
   }
 
-  async execute({ gateway, bus, imageGenerator, logger, config }: CommandContext): Promise<void> {
+  async execute({ gateway, bus, imageGenerator, logger, config, scheduler }: CommandContext): Promise<void> {
     const state = await gateway.loadRoundState(this.roundId);
 
     if (state.phase !== "prompt") {
@@ -23,10 +23,6 @@ export class SubmitPrompt extends Command {
 
     if (state.activePlayer !== this.playerId) {
       throw new Error("Only the active player can submit the real prompt");
-    }
-
-    if (state.promptDeadline && this.at >= state.promptDeadline) {
-      throw new Error("Cannot submit prompt after the deadline has passed");
     }
 
     const { inserted, prompts } = await gateway.appendPrompt(
@@ -57,7 +53,7 @@ export class SubmitPrompt extends Command {
       type: "ImageGenerated",
       roundId: state.id,
       imageUrl,
-      guessingDeadline: this.at + config.guessingDurationMs,
+      guessingDurationMs: config.guessingDurationMs,
     });
 
     logger?.info?.("Prompt submitted", {
@@ -71,6 +67,7 @@ export class SubmitPrompt extends Command {
       bus,
       logger,
       config,
+      scheduler,
     });
   }
 }

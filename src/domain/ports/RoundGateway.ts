@@ -1,4 +1,4 @@
-import type { RoundId, PlayerId, TimePoint, RoundPhase } from "../typedefs.js";
+import type { RoundId, PlayerId, TimePoint } from "../typedefs.js";
 
 /**
  * The authoritative domain snapshot of a single round of the game.
@@ -49,15 +49,6 @@ export interface RoundState {
 
   /** When the round started */
   startedAt: TimePoint;
-
-  /** Deadline for the active player to submit the real prompt */
-  promptDeadline?: TimePoint;
-
-  /** Deadline for players to submit decoy prompts */
-  guessingDeadline?: TimePoint;
-
-  /** Deadline for players to vote */
-  votingDeadline?: TimePoint;
 
   /** Generated image URL shared during the guessing phase */
   imageUrl?: string;
@@ -137,21 +128,14 @@ export interface RoundGateway {
   countSubmittedPrompts(roundId: RoundId): Promise<number>;
 
   /**
-   * Initialize and persist a new round with given players and deadlines.
+   * Initialize and persist a new round with given players.
    * The adapter generates a new round ID and returns the created state.
    */
   startNewRound(
     players: PlayerId[],
     activePlayer: PlayerId,
     startedAt: TimePoint,
-    promptDeadline: TimePoint,
   ): Promise<RoundState>;
-
-  /**
-   * Schedule a timeout for a specific phase. Infrastructure is responsible for
-   * delivering the matching {@link PhaseTimeout} command at the provided time.
-   */
-  scheduleTimeout(roundId: RoundId, phase: RoundPhase, at: TimePoint): Promise<void>;
 
   /**
    * Produce a deterministic shuffle for prompts to avoid leaking bias. The

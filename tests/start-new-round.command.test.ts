@@ -6,12 +6,12 @@ import type { RoundGateway } from "../src/domain/ports/RoundGateway";
 import type { MessageBus } from "../src/domain/ports/MessageBus";
 import { GameConfig } from "../src/domain/GameConfig";
 import type { ImageGenerator } from "../src/domain/ports/ImageGenerator";
+import type { Scheduler } from "../src/domain/ports/Scheduler";
 
 const makeGateway = () =>
   ({
     startNewRound: vi.fn(),
     saveRoundState: vi.fn(),
-    scheduleTimeout: vi.fn(),
   }) satisfies Partial<RoundGateway>;
 
 const makeBus = () =>
@@ -24,6 +24,11 @@ const makeImageGenerator = () =>
     generate: vi.fn(),
   }) satisfies Partial<ImageGenerator>;
 
+const makeScheduler = () =>
+  ({
+    scheduleTimeout: vi.fn(),
+  }) satisfies Partial<Scheduler>;
+
 const makeConfig = () => GameConfig.withDefaults();
 
 describe("StartNewRound command", () => {
@@ -31,6 +36,7 @@ describe("StartNewRound command", () => {
     const gateway = makeGateway();
     const bus = makeBus();
     const config = makeConfig();
+    const scheduler = makeScheduler();
     const now = Date.now();
     const players = ["p1", "p2", "p3", "p4"];
     const activePlayer = players[0];
@@ -41,7 +47,6 @@ describe("StartNewRound command", () => {
       activePlayer,
       phase: "prompt",
       startedAt: now,
-      promptDeadline: now + config.promptDurationMs,
     };
     gateway.startNewRound.mockResolvedValue(roundState);
 
@@ -51,39 +56,37 @@ describe("StartNewRound command", () => {
       bus: bus as MessageBus,
       imageGenerator: makeImageGenerator() as ImageGenerator,
       config,
+      scheduler: scheduler as Scheduler,
     });
 
-    expect(gateway.startNewRound).toHaveBeenCalledWith(
-      players,
-      activePlayer,
-      now,
-      now + config.promptDurationMs,
-    );
+    expect(gateway.startNewRound).toHaveBeenCalledWith(players, activePlayer, now);
     expect(gateway.saveRoundState).not.toHaveBeenCalled();
-    expect(gateway.scheduleTimeout).toHaveBeenCalledWith(
-      "round-1",
-      "prompt",
-      now + config.promptDurationMs,
-    );
     expect(bus.publish).toHaveBeenCalledWith("round:round-1", {
       type: "RoundStarted",
       roundId: "round-1",
       players,
       activePlayer,
       at: now,
-      promptDeadline: now + config.promptDurationMs,
+      promptDurationMs: config.promptDurationMs,
     });
+    expect(scheduler.scheduleTimeout).toHaveBeenCalledWith(
+      "round-1",
+      "prompt",
+      config.promptDurationMs,
+    );
   });
 
   it("throws when player count is below the minimum", async () => {
     const command = new StartNewRound(["p1", "p2", "p3"], "p1", Date.now());
     const gateway = makeGateway();
+    const scheduler = makeScheduler();
     await expect(
       command.execute({
         gateway: gateway as RoundGateway,
         bus: makeBus() as MessageBus,
         imageGenerator: makeImageGenerator() as ImageGenerator,
         config: makeConfig(),
+        scheduler: scheduler as Scheduler,
       }),
     ).rejects.toThrow(StartNewRoundInputError);
     expect(gateway.startNewRound).not.toHaveBeenCalled();
@@ -94,12 +97,14 @@ describe("StartNewRound command", () => {
     const players = ["p1", "p2", "p3", "p4", "p5", "p6", "p7"];
     const command = new StartNewRound(players, "p1", Date.now());
     const gateway = makeGateway();
+    const scheduler = makeScheduler();
     await expect(
       command.execute({
         gateway: gateway as RoundGateway,
         bus: makeBus() as MessageBus,
         imageGenerator: makeImageGenerator() as ImageGenerator,
         config: makeConfig(),
+        scheduler: scheduler as Scheduler,
       }),
     ).rejects.toThrow(StartNewRoundInputError);
     expect(gateway.startNewRound).not.toHaveBeenCalled();

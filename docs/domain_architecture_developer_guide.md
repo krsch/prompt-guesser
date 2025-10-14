@@ -273,6 +273,73 @@ The production commands in `src/domain/commands` follow a consistent structure. 
 
 ---
 
+## 8.5 Timeout Scheduling Lifecycle
+
+**Purpose:**
+Explain *when and how* timeouts are scheduled after removing `*Deadline` fields from the domain state.
+All scheduling now happens through the **`Scheduler` port**, keeping the domain deterministic and wall-clock agnostic.
+
+---
+
+### 1. Principles
+
+* **Domain purity:** No command ever creates or measures real time.
+* **Runtime-managed timing:** The `Scheduler` port is the only layer that interacts with the clock or timers.
+* **Idempotency:** Each `PhaseTimeout` command checks the current phase before acting, so duplicate or delayed executions are harmless.
+* **Event isolation:** `MessageBus` events (e.g. `PhaseChanged`) are for the frontend only; the runtime never listens to them to drive timeouts.
+
+---
+
+### 2. When to Schedule Timeouts
+
+Timeouts are scheduled **once per phase**, immediately after each phase transition:
+
+| Phase entered          | Timeout scheduled          | Where it happens           |
+| ---------------------- | -------------------------- | -------------------------- |
+| `prompt`               | `PhaseTimeout("prompt")`   | in `StartNewRound.execute` |
+| `guessing`             | `PhaseTimeout("guessing")` | in `transitionToGuessing`  |
+| `voting`               | `PhaseTimeout("voting")`   | in `transitionToVoting`    |
+| `scoring` / `finished` | none                       | end of round               |
+
+Each call uses the configured duration from `GameConfig`, e.g.:
+
+```ts
+await scheduler.scheduleTimeout(round.id, "guessing", config.guessingDurationMs);
+```
+
+---
+
+### 3. Runtime Responsibilities
+
+* **Startup / recovery:** On service start, the runtime may inspect persisted rounds and schedule any pending timeouts according to their current phase.
+* **Dispatch:** When the delay elapses, the scheduler dispatches a `PhaseTimeout` command whose `at` timestamp is filled by the scheduler itself.
+* **No rescheduling:** Normal flow requires no additional rescheduling. Only restarts or crash recovery trigger re-scheduling.
+
+---
+
+### 4. Testing Guidance
+
+In tests, use the `InMemoryScheduler` adapter:
+
+```ts
+const scheduler = new InMemoryScheduler(dispatch);
+await scheduler.scheduleTimeout("round-1", "prompt", 2000);
+await scheduler.runFor(2000); // triggers the command deterministically
+```
+
+This allows complete control over virtual time without fake timers or real delays.
+
+---
+
+### 5. Summary
+
+* Timeouts are **scheduled externally**, never stored in state.
+* Each new phase automatically triggers its own timeout.
+* Commands remain deterministic, and duplicated schedules are safe.
+* The runtime hosts the scheduler; the domain defines only *when* a timeout should exist.
+
+---
+
 ## 9) How to Implement a New Command (Checklist)
 
 1. **Decide intent and phase.** Which phase accepts this action? What invariants apply?

@@ -1,4 +1,7 @@
-import { RoundNotFoundError } from "../../domain/errors/index.js";
+import {
+  RoundNotFoundError,
+} from "../../domain/errors/index.js";
+import { assertValidRoundState } from "../../domain/entities/RoundRules.js";
 import type {
   PromptAppendResult,
   RoundGateway,
@@ -14,6 +17,7 @@ export class InMemoryRoundGateway implements RoundGateway {
   async loadRoundState(roundId: RoundId): Promise<RoundState> {
     const state = this.#rounds.get(roundId);
     if (!state) throw new RoundNotFoundError(roundId);
+    assertValidRoundState(state);
     return this.#clone(state);
   }
 
@@ -23,6 +27,8 @@ export class InMemoryRoundGateway implements RoundGateway {
 
     state.prompts = stored.prompts;
     state.votes = stored.votes;
+
+    assertValidRoundState(state);
 
     this.#rounds.set(state.id, this.#clone(state));
   }
@@ -102,6 +108,8 @@ export class InMemoryRoundGateway implements RoundGateway {
       prompts: {},
       startedAt,
     };
+
+    assertValidRoundState(state);
 
     this.#rounds.set(state.id, state);
     return this.#clone(state);

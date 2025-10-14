@@ -48,6 +48,12 @@ describe("InMemoryRoundGateway", () => {
       prompts: { [ACTIVE]: "real prompt" },
     });
 
+    await gateway.saveRoundState({
+      ...(await gateway.loadRoundState(id)),
+      phase: "guessing",
+      imageUrl: "https://example.com/image.png",
+    });
+
     const countAfterDecoy = await gateway.appendPrompt(id, PLAYERS[1], "decoy");
     expect(countAfterDecoy).toEqual({
       inserted: true,
@@ -108,12 +114,15 @@ describe("InMemoryRoundGateway", () => {
       START_AT,
     );
 
+    await gateway.appendPrompt(state.id, ACTIVE, "real prompt");
+
     const updated = {
       ...state,
       phase: "guessing" as const,
       shuffledPrompts: ["real"],
       shuffledPromptOwners: [ACTIVE],
       imageUrl: "https://example.com/image.png",
+      prompts: { [ACTIVE]: "real prompt" },
     };
 
     await gateway.saveRoundState(updated);
@@ -139,6 +148,13 @@ describe("InMemoryRoundGateway", () => {
     expect(await gateway.countSubmittedPrompts(id)).toBe(0);
 
     await gateway.appendPrompt(id, ACTIVE, "real prompt");
+
+    await gateway.saveRoundState({
+      ...(await gateway.loadRoundState(id)),
+      phase: "guessing",
+      imageUrl: "https://example.com/image.png",
+    });
+
     await gateway.appendPrompt(id, PLAYERS[1], "decoy");
 
     expect(await gateway.countSubmittedPrompts(id)).toBe(2);

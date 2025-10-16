@@ -1,14 +1,17 @@
 {
-  "name": "prompt-guesser",
-  "version": "0.0.1",
+  "name": "@prompt-guesser/core",
+  "version": "0.1.0",
   "type": "module",
+  "private": false,
   "description": "Prompt Guesser is an online, turn-based party game for 4–6 players.",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "test": "vitest",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest --watch"
   },

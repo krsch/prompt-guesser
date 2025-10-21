@@ -1,4 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+import { webcrypto } from "node:crypto";
 
 import { InMemoryRoundGateway } from "../src/adapters/in-memory/InMemoryRoundGateway";
 import { GameConfig } from "../src/domain/GameConfig";
@@ -9,6 +11,11 @@ import { SubmitVote } from "../src/domain/commands/SubmitVote";
 import type { MessageBus } from "../src/domain/ports/MessageBus";
 import type { ImageGenerator } from "../src/domain/ports/ImageGenerator";
 import type { Scheduler } from "../src/domain/ports/Scheduler";
+import {
+  getShuffledPrompts,
+  canonicalSubmittedPlayers,
+  promptIndexToPlayerId,
+} from "../src/domain/entities/RoundRules.js";
 
 const players = ["alex", "bailey", "casey", "devon"];
 const activePlayer = players[0];
@@ -21,8 +28,14 @@ const imageGenerator: ImageGenerator = {
 
 describe("Integration: play a full round", () => {
   it("walks through prompt, guessing and voting phases", async () => {
+    const seedSpy = vi
+      .spyOn(webcrypto, "getRandomValues")
+      .mockImplementation((array: Uint32Array) => {
+        array[0] = 0xface_b00c;
+        return array;
+      });
+
     const gateway = new InMemoryRoundGateway();
-    gateway.shufflePrompts = async (_roundId, prompts) => prompts;
     const events: { channel: string; event: any }[] = [];
     const bus: MessageBus = {
       async publish(channel, event) {
@@ -89,7 +102,8 @@ describe("Integration: play a full round", () => {
 
     const roundStateAfterPrompts = await gateway.loadRoundState(roundId);
     expect(roundStateAfterPrompts.phase).toBe("voting");
-    expect(new Set(roundStateAfterPrompts.shuffledPrompts)).toEqual(
+    const promptsAfterShuffle = getShuffledPrompts(roundStateAfterPrompts);
+    expect(new Set(promptsAfterShuffle)).toEqual(
       new Set([
         "A cat playing piano",
         "A dog painting",
@@ -97,7 +111,10 @@ describe("Integration: play a full round", () => {
         "A turtle surfing",
       ]),
     );
-    expect(roundStateAfterPrompts.shuffledPromptOwners).toEqual(players);
+    const owners = promptsAfterShuffle.map((_, index) =>
+      promptIndexToPlayerId(roundStateAfterPrompts, index)!,
+    );
+    expect(new Set(owners)).toEqual(new Set(players));
 
     await new SubmitVote(roundId, players[1], 0, promptTime + 5_000).execute({
       gateway,
@@ -123,12 +140,36 @@ describe("Integration: play a full round", () => {
 
     const finalState = await gateway.loadRoundState(roundId);
     expect(finalState.phase).toBe("finished");
-    expect(finalState.scores).toEqual({
-      [players[0]]: 3,
-      [players[1]]: 4,
-      [players[2]]: 1,
-      [players[3]]: 0,
-    });
+
+    const expectedScores = Object.fromEntries(players.map((player) => [player, 0]));
+    const base = canonicalSubmittedPlayers(finalState);
+    const permutation = finalState.shuffleOrder ?? [];
+    const votes = finalState.votes ?? {};
+    const activeBaseIndex = base.indexOf(activePlayer);
+    const realPromptIndex = permutation.indexOf(activeBaseIndex);
+
+    let correctGuesses = 0;
+    for (const [voterId, index] of Object.entries(votes)) {
+      if (index === realPromptIndex) {
+        expectedScores[voterId]! += 3;
+        correctGuesses += 1;
+        continue;
+      }
+
+      const owner = base[permutation[index]!];
+      expectedScores[owner]! += 1;
+    }
+
+    const totalVotes = Object.keys(votes).length;
+    if (totalVotes > 0 && (correctGuesses === 0 || correctGuesses === totalVotes)) {
+      for (const voterId of Object.keys(votes)) {
+        expectedScores[voterId]! += 2;
+      }
+    } else if (correctGuesses > 0 && correctGuesses < totalVotes) {
+      expectedScores[activePlayer]! += 3;
+    }
+
+    expect(finalState.scores).toEqual(expectedScores);
     expect(finalState.finishedAt).toBeDefined();
 
     const phases = events
@@ -146,5 +187,6 @@ describe("Integration: play a full round", () => {
         (entry) => entry.event.type === "RoundFinished" && entry.event.roundId === roundId,
       ),
     ).toBe(true);
+    seedSpy.mockRestore();
   });
 });

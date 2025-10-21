@@ -12,6 +12,7 @@ function makeState(overrides: Partial<RoundState> = {}): RoundState {
     activePlayer: "alice",
     phase: "prompt",
     prompts: {},
+    seed: 1,
     startedAt: 1,
     ...overrides,
   };
@@ -62,6 +63,10 @@ describe("assertValidRoundState", () => {
     expectInvalidState({ startedAt: 0 }, "missing or invalid start time");
   });
 
+  it("rejects when the seed is missing", () => {
+    expectInvalidState({ seed: Number.NaN } as Partial<RoundState>, "missing or invalid seed");
+  });
+
   it("rejects decoy prompts during prompt phase", () => {
     expectInvalidState(
       { prompts: { bob: "decoy" } },
@@ -105,92 +110,51 @@ describe("assertValidRoundState", () => {
     );
   });
 
-  it("requires shuffled prompts in voting phase and later", () => {
+  it("requires shuffle order in voting phase and later", () => {
     expectInvalidState(
       {
         phase: "voting",
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
-        shuffledPrompts: [],
+        shuffleOrder: [],
       },
-      "missing shuffled prompts",
+      "missing shuffle order",
     );
   });
 
-  it("requires shuffled prompt owners in voting phase and later", () => {
+  it("requires shuffle order length to match submitted prompts", () => {
     expectInvalidState(
       {
         phase: "voting",
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["real"],
+        shuffleOrder: [0, 1],
       },
-      "missing shuffled prompt owners",
+      "shuffle order length mismatch",
     );
   });
 
-  it("requires shuffled prompts length to match submitted prompts", () => {
-    expectInvalidState(
-      {
-        phase: "voting",
-        prompts: { alice: "real" },
-        imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["real", "extra"],
-        shuffledPromptOwners: ["alice", "bob"],
-      },
-      "shuffled prompts do not match submitted prompts",
-    );
-  });
-
-  it("requires shuffled prompt owners length to match prompts", () => {
-    expectInvalidState(
-      {
-        phase: "voting",
-        prompts: { alice: "real" },
-        imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["real"],
-        shuffledPromptOwners: ["alice", "bob"],
-      },
-      "shuffled prompt owners do not match prompts",
-    );
-  });
-
-  it("requires shuffled prompt values to match submitted prompts", () => {
-    expectInvalidState(
-      {
-        phase: "voting",
-        prompts: { alice: "real" },
-        imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["decoy"],
-        shuffledPromptOwners: ["alice"],
-      },
-      "shuffled prompts do not match submitted prompts",
-    );
-  });
-
-  it("rejects shuffled prompt values when counts differ", () => {
+  it("rejects shuffle order containing non-integer entries", () => {
     expectInvalidState(
       {
         phase: "voting",
         prompts: { alice: "real", bob: "decoy" },
         imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["real", "real"],
-        shuffledPromptOwners: ["alice", "bob"],
+        shuffleOrder: [0, Number.NaN],
       },
-      "shuffled prompts do not match submitted prompts",
+      "shuffle order contains invalid indices",
     );
   });
 
-  it("rejects shuffled prompt owners that do not match the prompts", () => {
+  it("rejects shuffle order that is not a permutation", () => {
     expectInvalidState(
       {
         phase: "voting",
         prompts: { alice: "real", bob: "decoy" },
         imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["real", "decoy"],
-        shuffledPromptOwners: ["alice", "alice"],
+        shuffleOrder: [0, 0],
       },
-      "shuffled prompt owners do not match prompts",
+      "shuffle order is not a permutation",
     );
   });
 
@@ -200,8 +164,7 @@ describe("assertValidRoundState", () => {
         phase: "scoring",
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["real"],
-        shuffledPromptOwners: ["alice"],
+        shuffleOrder: [0],
         votes: { bob: 0 },
       },
       "missing scores",
@@ -214,8 +177,7 @@ describe("assertValidRoundState", () => {
         phase: "scoring",
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["real"],
-        shuffledPromptOwners: ["alice"],
+        shuffleOrder: [0],
         votes: { bob: 0 },
         scores: { alice: 1 },
       },
@@ -229,8 +191,7 @@ describe("assertValidRoundState", () => {
         phase: "scoring",
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["real"],
-        shuffledPromptOwners: ["alice"],
+        shuffleOrder: [0],
         scores: { alice: 0, bob: 0 },
       },
       "missing votes",
@@ -243,8 +204,7 @@ describe("assertValidRoundState", () => {
         phase: "scoring",
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["real"],
-        shuffledPromptOwners: ["alice"],
+        shuffleOrder: [0],
         votes: { charlie: 0 } as RoundState["votes"],
         scores: { alice: 0, bob: 0 },
       },
@@ -258,8 +218,7 @@ describe("assertValidRoundState", () => {
         phase: "scoring",
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["real"],
-        shuffledPromptOwners: ["alice"],
+        shuffleOrder: [0],
         votes: { alice: 0 },
         scores: { alice: 0, bob: 0 },
       },
@@ -273,8 +232,7 @@ describe("assertValidRoundState", () => {
         phase: "scoring",
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
-        shuffledPrompts: ["real"],
-        shuffledPromptOwners: ["alice"],
+        shuffleOrder: [0],
         votes: { bob: 5 },
         scores: { alice: 0, bob: 0 },
       },
@@ -287,8 +245,7 @@ describe("assertValidRoundState", () => {
       {
         phase: "scoring",
         prompts: { alice: "real" },
-        shuffledPrompts: ["real"],
-        shuffledPromptOwners: ["alice"],
+        shuffleOrder: [0],
         votes: { bob: 0 },
         scores: { alice: 0, bob: 0 },
       },
@@ -301,8 +258,7 @@ describe("assertValidRoundState", () => {
       phase: "scoring",
       prompts: { alice: "real" },
       imageUrl: "https://example.com/image.png",
-      shuffledPrompts: ["real"],
-      shuffledPromptOwners: ["alice"],
+      shuffleOrder: [0],
       votes: { bob: 0 },
       scores: { alice: 1, bob: 2 },
     });

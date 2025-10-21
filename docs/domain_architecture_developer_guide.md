@@ -73,8 +73,8 @@ export interface RoundState {
   phase: RoundPhase;
 
   prompts?: Record<PlayerId, string>;     // set during guessing (active player's entry is real prompt)
-  shuffledPrompts?: string[];             // set at transition to voting
-  votes?: Record<PlayerId, number>;       // set during voting (index into shuffledPrompts)
+  shuffleOrder?: number[];                // set at transition to voting
+  votes?: Record<PlayerId, number>;       // set during voting (index into shuffled prompts)
   scores?: Record<PlayerId, number>;      // set at scoring
 
   startedAt: TimePoint;
@@ -212,7 +212,7 @@ Put deterministic logic here so multiple command implementations can reuse it:
 - `isPlayer(state, playerId)`
 - `hasSubmittedPrompt(state, playerId)`
 - `allPromptsSubmitted(state)`
-- `shufflePrompts(state): string[]` (use deterministic seed if needed)
+- `generateShuffle(state): number[]` and helper accessors for prompt order
 - `calculateScores(state): Record<PlayerId, number>`
 
 These never touch adapters; they just process inputs and return outputs.
@@ -256,7 +256,7 @@ The production commands in `src/domain/commands` follow a consistent structure. 
 - **Atomicity:** `appendPrompt` and `appendVote` must be atomic and **idempotent** (same player submitting twice should not change stored state).
 - **Return values:** These methods must return **post-update snapshots** to avoid update-then-read round trips.
 - **`saveRoundState`:** Implement optimistic concurrency or diff-merge internally; the domain should not carry versions.
-- **Static mutability:** Treat fields like `prompts`, `votes`, `phase`, `shuffledPrompts`, `scores`, `finishedAt` as mutable; others are immutable after creation.
+- **Static mutability:** Treat fields like `prompts`, `votes`, `phase`, `shuffleOrder`, `scores`, `finishedAt` as mutable; others are immutable after creation.
 - **Serialization:** Optional fields may be absent in storage; default to empty objects/arrays in adapters when reading if needed.
 
 ---

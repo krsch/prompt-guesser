@@ -5,12 +5,12 @@ import type { MessageBus } from "../src/domain/ports/MessageBus";
 import { GameConfig } from "../src/domain/GameConfig";
 import type { Scheduler } from "../src/domain/ports/Scheduler";
 import { PhaseTimeout } from "../src/domain/commands/PhaseTimeout";
+import { getShuffledPrompts } from "../src/domain/entities/RoundRules.js";
 
 const makeGateway = () =>
   ({
     loadRoundState: vi.fn(),
     saveRoundState: vi.fn(),
-    shufflePrompts: vi.fn((_, prompts: any[]) => prompts),
   }) satisfies Partial<RoundGateway>;
 
 const makeBus = () =>
@@ -32,6 +32,7 @@ const roundBase = (overrides: Partial<RoundState>): RoundState => ({
   phase: "guessing",
   startedAt: Date.now() - 10_000,
   prompts: { a: "real" },
+  seed: 1234,
   votes: {},
   ...overrides,
 });
@@ -58,26 +59,26 @@ describe("PhaseTimeout command", () => {
       scheduler: scheduler as Scheduler,
     });
 
-    expect(gateway.shufflePrompts).toHaveBeenCalledWith(round.id, [
-      ["a", "real"],
-      ["b", "decoy"],
-    ]);
     expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
-    expect(gateway.saveRoundState).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: round.id,
-        phase: "voting",
-        shuffledPrompts: ["real", "decoy"],
-        shuffledPromptOwners: ["a", "b"],
-      }),
-    );
-    expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
-      type: "PromptsReady",
+    const savedState = gateway.saveRoundState.mock.calls[0]![0] as RoundState;
+    expect(savedState.id).toBe(round.id);
+    expect(savedState.phase).toBe("voting");
+    expect(savedState.shuffleOrder).toBeDefined();
+    expect(savedState.shuffleOrder).toHaveLength(2);
+
+    const derivedPrompts = getShuffledPrompts(savedState);
+    expect(new Set(derivedPrompts)).toEqual(new Set(["real", "decoy"]));
+
+    const promptsEvent = bus.publish.mock.calls.find(([, event]) => event.type === "PromptsReady");
+    expect(promptsEvent).toBeDefined();
+    expect(promptsEvent?.[0]).toBe(`round:${round.id}`);
+    expect(promptsEvent?.[1]).toMatchObject({
       roundId: round.id,
-      prompts: ["real", "decoy"],
       votingDurationMs: config.votingDurationMs,
       at: now,
     });
+    expect(promptsEvent?.[1].prompts).toEqual(derivedPrompts);
+
     expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
       type: "PhaseChanged",
       phase: "voting",
@@ -137,9 +138,8 @@ describe("PhaseTimeout command", () => {
     const now = Date.now();
     const round = roundBase({
       phase: "voting",
-      shuffledPrompts: ["real", "decoy"],
-      shuffledPromptOwners: ["a", "b"],
       prompts: { a: "real", b: "decoy" },
+      shuffleOrder: [0, 1],
       votes: { b: 1 },
     });
 

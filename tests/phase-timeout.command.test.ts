@@ -8,12 +8,10 @@ import {
 } from "../src/domain/entities/RoundRules.js";
 import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 
-type RoundOverrides =
-  & Partial<Omit<RoundState, "prompts" | "votes">>
-  & {
-    readonly prompts?: Record<string, string>;
-    readonly votes?: Record<string, number>;
-  };
+type RoundOverrides = Partial<Omit<RoundState, "prompts" | "votes">> & {
+  readonly prompts?: Record<string, string>;
+  readonly votes?: Record<string, number>;
+};
 
 const roundBase = (overrides: RoundOverrides = {}): RoundState => ({
   id: "round-7",

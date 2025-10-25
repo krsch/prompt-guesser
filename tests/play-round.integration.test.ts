@@ -100,7 +100,9 @@ describe("Integration: play a full round", () => {
     });
 
     const guessingEvents = events.filter((entry) => entry.event.type === "PhaseChanged");
-    expect(guessingEvents.some((entry) => entry.event["phase"] === "guessing")).toBe(true);
+    expect(guessingEvents.some((entry) => entry.event["phase"] === "guessing")).toBe(
+      true,
+    );
 
     await new SubmitDecoy(
       roundId,

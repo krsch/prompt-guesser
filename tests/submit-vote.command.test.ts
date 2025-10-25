@@ -5,14 +5,17 @@ import { SubmitVote } from "../src/domain/commands/SubmitVote.js";
 import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 import type { PlayerId } from "../src/domain/typedefs.js";
 
-const PLAYERS = ["active", "blue", "green", "orange"] as const satisfies readonly string[];
+const PLAYERS = [
+  "active",
+  "blue",
+  "green",
+  "orange",
+] as const satisfies readonly string[];
 
-type RoundOverrides =
-  & Partial<Omit<RoundState, "prompts" | "votes">>
-  & {
-    readonly prompts?: Record<string, string>;
-    readonly votes?: Record<string, number>;
-  };
+type RoundOverrides = Partial<Omit<RoundState, "prompts" | "votes">> & {
+  readonly prompts?: Record<string, string>;
+  readonly votes?: Record<string, number>;
+};
 
 const baseRound = (overrides: RoundOverrides = {}): RoundState => ({
   id: "round-123",

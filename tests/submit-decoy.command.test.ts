@@ -8,7 +8,12 @@ import {
 } from "../src/domain/entities/RoundRules.js";
 import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 
-const PLAYERS = ["active", "blue", "green", "orange"] as const satisfies readonly string[];
+const PLAYERS = [
+  "active",
+  "blue",
+  "green",
+  "orange",
+] as const satisfies readonly string[];
 
 describe("SubmitDecoy command", () => {
   it("stores a decoy and transitions to voting when all prompts are submitted", async () => {

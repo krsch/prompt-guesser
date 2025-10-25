@@ -12,13 +12,11 @@ const promptsOf = (value: Record<string, string>): Record<string, string> => val
 const votesOf = (value: Record<string, number>): Record<string, number> => value;
 const scoresOf = (value: Record<string, number>): Record<string, number> => value;
 
-type RoundOverrides =
-  & Partial<Omit<RoundState, "prompts" | "votes" | "scores">>
-  & {
-    readonly prompts?: Record<string, string>;
-    readonly votes?: Record<string, number>;
-    readonly scores?: Record<string, number>;
-  };
+type RoundOverrides = Partial<Omit<RoundState, "prompts" | "votes" | "scores">> & {
+  readonly prompts?: Record<string, string>;
+  readonly votes?: Record<string, number>;
+  readonly scores?: Record<string, number>;
+};
 
 function makeState(overrides: RoundOverrides = {}): RoundState {
   return {

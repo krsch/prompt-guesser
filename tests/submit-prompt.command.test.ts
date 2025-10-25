@@ -77,7 +77,7 @@ describe("SubmitPrompt command", () => {
       phase: "guessing",
       startedAt: now - 1000,
       seed: 42,
-      prompts: { "p1": "real prompt" },
+      prompts: { p1: "real prompt" },
       imageUrl: "https://example.com/image.png",
     };
 

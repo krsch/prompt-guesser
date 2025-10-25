@@ -116,21 +116,42 @@ describe("Integration: play a full round", () => {
     );
     expect(new Set(owners)).toEqual(new Set(players));
 
-    await new SubmitVote(roundId, players[1], 0, promptTime + 5_000).execute({
+    const voteIndexForPrompt = (prompt: string) => {
+      const index = promptsAfterShuffle.indexOf(prompt);
+      expect(index).toBeGreaterThanOrEqual(0);
+      return index;
+    };
+
+    await new SubmitVote(
+      roundId,
+      players[1],
+      voteIndexForPrompt("A cat playing piano"),
+      promptTime + 5_000,
+    ).execute({
       gateway,
       bus,
       imageGenerator,
       config,
       scheduler,
     });
-    await new SubmitVote(roundId, players[2], 2, promptTime + 6_000).execute({
+    await new SubmitVote(
+      roundId,
+      players[2],
+      voteIndexForPrompt("A turtle surfing"),
+      promptTime + 6_000,
+    ).execute({
       gateway,
       bus,
       imageGenerator,
       config,
       scheduler,
     });
-    await new SubmitVote(roundId, players[3], 1, promptTime + 7_000).execute({
+    await new SubmitVote(
+      roundId,
+      players[3],
+      voteIndexForPrompt("A dog painting"),
+      promptTime + 7_000,
+    ).execute({
       gateway,
       bus,
       imageGenerator,

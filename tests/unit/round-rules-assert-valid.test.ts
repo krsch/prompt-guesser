@@ -1,9 +1,11 @@
-import { describe, expect, it, afterEach, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { InMemoryRoundGateway } from "../../src/adapters/in-memory/InMemoryRoundGateway.js";
 import { assertValidRoundState } from "../../src/domain/entities/RoundRules.js";
+import * as RoundRules from "../../src/domain/entities/RoundRules.js";
 import { InvalidRoundStateError } from "../../src/domain/errors/InvalidRoundStateError.js";
 import type { RoundPhase, RoundState } from "../../src/domain/ports/RoundGateway.js";
-import * as RoundRules from "../../src/domain/entities/RoundRules.js";
+import { cloneState } from "../support/mocks.js";
 
 function makeState(overrides: Partial<RoundState> = {}): RoundState {
   return {
@@ -20,14 +22,12 @@ function makeState(overrides: Partial<RoundState> = {}): RoundState {
 
 function expectInvalidState(overrides: Partial<RoundState>, reason: string): void {
   const state = makeState(overrides);
-  const error = (() => {
-    try {
-      assertValidRoundState(state);
-      return null;
-    } catch (err) {
-      return err as InvalidRoundStateError;
-    }
-  })();
+  let error: InvalidRoundStateError | null = null;
+  try {
+    assertValidRoundState(state);
+  } catch (err) {
+    error = err as InvalidRoundStateError;
+  }
 
   expect(error).toBeInstanceOf(InvalidRoundStateError);
   expect(error?.reason).toBe(reason);
@@ -275,7 +275,7 @@ describe("assertValidRoundState", () => {
       votes: { bob: 0 },
       scores: { alice: 1, bob: 2 },
     });
-    const snapshot = structuredClone(state);
+    const snapshot = cloneState(state);
 
     expect(() => assertValidRoundState(state)).not.toThrow();
     expect(state).toEqual(snapshot);

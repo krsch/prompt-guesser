@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import { InMemoryScheduler } from "../src/adapters/in-memory/InMemoryScheduler";
-import { PhaseTimeout } from "../src/domain/commands/PhaseTimeout";
+import type { PhaseTimeout } from "../src/domain/commands/PhaseTimeout";
 
 describe("InMemoryScheduler", () => {
   it("dispatches commands once their delay elapses", async () => {

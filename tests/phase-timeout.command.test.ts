@@ -1,29 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import type { RoundGateway, RoundState } from "../src/domain/ports/RoundGateway";
-import type { MessageBus } from "../src/domain/ports/MessageBus";
-import { GameConfig } from "../src/domain/GameConfig";
-import type { Scheduler } from "../src/domain/ports/Scheduler";
-import { PhaseTimeout } from "../src/domain/commands/PhaseTimeout";
+import { createCommandContext } from "./support/mocks.js";
+import { PhaseTimeout } from "../src/domain/commands/PhaseTimeout.js";
 import { getShuffledPrompts } from "../src/domain/entities/RoundRules.js";
-
-const makeGateway = () =>
-  ({
-    loadRoundState: vi.fn(),
-    saveRoundState: vi.fn(),
-  }) satisfies Partial<RoundGateway>;
-
-const makeBus = () =>
-  ({
-    publish: vi.fn(),
-  }) satisfies Partial<MessageBus>;
-
-const makeConfig = () => GameConfig.withDefaults();
-
-const makeScheduler = () =>
-  ({
-    scheduleTimeout: vi.fn(),
-  }) satisfies Partial<Scheduler>;
+import type { RoundState } from "../src/domain/ports/RoundGateway.js";
 
 const roundBase = (overrides: Partial<RoundState>): RoundState => ({
   id: "round-7",
@@ -39,10 +19,8 @@ const roundBase = (overrides: Partial<RoundState>): RoundState => ({
 
 describe("PhaseTimeout command", () => {
   it("advances from guessing to voting when the deadline passes", async () => {
-    const gateway = makeGateway();
-    const bus = makeBus();
-    const config = makeConfig();
-    const scheduler = makeScheduler();
+    const context = createCommandContext();
+    const { gateway, bus, config, scheduler } = context;
     const now = Date.now();
     const round = roundBase({
       prompts: { a: "real", b: "decoy" },
@@ -51,16 +29,10 @@ describe("PhaseTimeout command", () => {
     gateway.loadRoundState.mockResolvedValue(round);
 
     const command = new PhaseTimeout(round.id, "guessing", now);
-    await command.execute({
-      gateway: gateway as RoundGateway,
-      bus: bus as MessageBus,
-      imageGenerator: { generate: vi.fn() } as any,
-      config,
-      scheduler: scheduler as Scheduler,
-    });
+    await command.execute(context);
 
     expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
-    const savedState = gateway.saveRoundState.mock.calls[0]![0] as RoundState;
+    const [savedState] = gateway.saveRoundState.mock.calls[0] ?? [];
     expect(savedState.id).toBe(round.id);
     expect(savedState.phase).toBe("voting");
     expect(savedState.shuffleOrder).toBeDefined();
@@ -94,10 +66,8 @@ describe("PhaseTimeout command", () => {
   });
 
   it("finishes the round when the prompt deadline passes without a submission", async () => {
-    const gateway = makeGateway();
-    const bus = makeBus();
-    const config = makeConfig();
-    const scheduler = makeScheduler();
+    const context = createCommandContext();
+    const { gateway, bus, config, scheduler } = context;
     const now = Date.now();
     const round = roundBase({
       phase: "prompt",
@@ -107,13 +77,7 @@ describe("PhaseTimeout command", () => {
     gateway.loadRoundState.mockResolvedValue(round);
 
     const command = new PhaseTimeout(round.id, "prompt", now);
-    await command.execute({
-      gateway: gateway as RoundGateway,
-      bus: bus as MessageBus,
-      imageGenerator: { generate: vi.fn() } as any,
-      config,
-      scheduler: scheduler as Scheduler,
-    });
+    await command.execute(context);
 
     expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
     expect(gateway.saveRoundState).toHaveBeenCalledWith(
@@ -133,10 +97,8 @@ describe("PhaseTimeout command", () => {
   });
 
   it("finalizes the round when the voting deadline expires", async () => {
-    const gateway = makeGateway();
-    const bus = makeBus();
-    const config = makeConfig();
-    const scheduler = makeScheduler();
+    const context = createCommandContext();
+    const { gateway, bus, config, scheduler } = context;
     const now = Date.now();
     const round = roundBase({
       phase: "voting",
@@ -148,13 +110,7 @@ describe("PhaseTimeout command", () => {
     gateway.loadRoundState.mockResolvedValue(round);
 
     const command = new PhaseTimeout(round.id, "voting", now);
-    await command.execute({
-      gateway: gateway as RoundGateway,
-      bus: bus as MessageBus,
-      imageGenerator: { generate: vi.fn() } as any,
-      config,
-      scheduler: scheduler as Scheduler,
-    });
+    await command.execute(context);
 
     expect(gateway.saveRoundState).toHaveBeenCalledTimes(2);
     expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
@@ -172,23 +128,15 @@ describe("PhaseTimeout command", () => {
   });
 
   it("does nothing when the stored phase does not match", async () => {
-    const gateway = makeGateway();
-    const bus = makeBus();
-    const config = makeConfig();
-    const scheduler = makeScheduler();
+    const context = createCommandContext();
+    const { gateway, bus, config, scheduler } = context;
     const now = Date.now();
     const round = roundBase({ phase: "voting" });
 
     gateway.loadRoundState.mockResolvedValue(round);
 
     const command = new PhaseTimeout(round.id, "guessing", now);
-    await command.execute({
-      gateway: gateway as RoundGateway,
-      bus: bus as MessageBus,
-      imageGenerator: { generate: vi.fn() } as any,
-      config,
-      scheduler: scheduler as Scheduler,
-    });
+    await command.execute(context);
 
     expect(gateway.saveRoundState).not.toHaveBeenCalled();
     expect(bus.publish).not.toHaveBeenCalled();

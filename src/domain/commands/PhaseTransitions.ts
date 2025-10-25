@@ -1,7 +1,7 @@
 import { generateShuffle, getShuffledPrompts } from "../entities/RoundRules.js";
-import type { CommandContext } from "./Command.js";
 import type { RoundState, ValidRoundState } from "../ports/RoundGateway.js";
 import type { PlayerId, TimePoint } from "../typedefs.js";
+import type { CommandContext } from "./Command.js";
 
 type PhaseTransitionContext = Pick<
   CommandContext,

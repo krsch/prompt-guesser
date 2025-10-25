@@ -1,42 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { StartNewRound } from "../src/domain/commands/StartNewRound";
-import { StartNewRoundInputError } from "../src/domain/errors/StartNewRoundInputError";
-import type { RoundGateway } from "../src/domain/ports/RoundGateway";
-import type { MessageBus } from "../src/domain/ports/MessageBus";
-import { GameConfig } from "../src/domain/GameConfig";
-import type { ImageGenerator } from "../src/domain/ports/ImageGenerator";
-import type { Scheduler } from "../src/domain/ports/Scheduler";
-
-const makeGateway = () =>
-  ({
-    startNewRound: vi.fn(),
-    saveRoundState: vi.fn(),
-  }) satisfies Partial<RoundGateway>;
-
-const makeBus = () =>
-  ({
-    publish: vi.fn(),
-  }) satisfies Partial<MessageBus>;
-
-const makeImageGenerator = () =>
-  ({
-    generate: vi.fn(),
-  }) satisfies Partial<ImageGenerator>;
-
-const makeScheduler = () =>
-  ({
-    scheduleTimeout: vi.fn(),
-  }) satisfies Partial<Scheduler>;
-
-const makeConfig = () => GameConfig.withDefaults();
+import { createCommandContext } from "./support/mocks.js";
+import { StartNewRound } from "../src/domain/commands/StartNewRound.js";
+import { StartNewRoundInputError } from "../src/domain/errors/StartNewRoundInputError.js";
 
 describe("StartNewRound command", () => {
   it("starts a new round and publishes the round started event", async () => {
-    const gateway = makeGateway();
-    const bus = makeBus();
-    const config = makeConfig();
-    const scheduler = makeScheduler();
+    const context = createCommandContext();
+    const { gateway, bus, config, scheduler } = context;
     const now = Date.now();
     const players = ["p1", "p2", "p3", "p4"];
     const activePlayer = players[0];
@@ -51,13 +22,7 @@ describe("StartNewRound command", () => {
     gateway.startNewRound.mockResolvedValue(roundState);
 
     const command = new StartNewRound(players, activePlayer, now);
-    await command.execute({
-      gateway: gateway as RoundGateway,
-      bus: bus as MessageBus,
-      imageGenerator: makeImageGenerator() as ImageGenerator,
-      config,
-      scheduler: scheduler as Scheduler,
-    });
+    await command.execute(context);
 
     expect(gateway.startNewRound).toHaveBeenCalledWith(players, activePlayer, now);
     expect(gateway.saveRoundState).not.toHaveBeenCalled();
@@ -78,17 +43,9 @@ describe("StartNewRound command", () => {
 
   it("throws when player count is below the minimum", async () => {
     const command = new StartNewRound(["p1", "p2", "p3"], "p1", Date.now());
-    const gateway = makeGateway();
-    const scheduler = makeScheduler();
-    await expect(
-      command.execute({
-        gateway: gateway as RoundGateway,
-        bus: makeBus() as MessageBus,
-        imageGenerator: makeImageGenerator() as ImageGenerator,
-        config: makeConfig(),
-        scheduler: scheduler as Scheduler,
-      }),
-    ).rejects.toThrow(StartNewRoundInputError);
+    const context = createCommandContext();
+    const { gateway } = context;
+    await expect(command.execute(context)).rejects.toThrow(StartNewRoundInputError);
     expect(gateway.startNewRound).not.toHaveBeenCalled();
     expect(gateway.saveRoundState).not.toHaveBeenCalled();
   });
@@ -96,17 +53,9 @@ describe("StartNewRound command", () => {
   it("throws when player count is above the maximum", async () => {
     const players = ["p1", "p2", "p3", "p4", "p5", "p6", "p7"];
     const command = new StartNewRound(players, "p1", Date.now());
-    const gateway = makeGateway();
-    const scheduler = makeScheduler();
-    await expect(
-      command.execute({
-        gateway: gateway as RoundGateway,
-        bus: makeBus() as MessageBus,
-        imageGenerator: makeImageGenerator() as ImageGenerator,
-        config: makeConfig(),
-        scheduler: scheduler as Scheduler,
-      }),
-    ).rejects.toThrow(StartNewRoundInputError);
+    const context = createCommandContext();
+    const { gateway } = context;
+    await expect(command.execute(context)).rejects.toThrow(StartNewRoundInputError);
     expect(gateway.startNewRound).not.toHaveBeenCalled();
     expect(gateway.saveRoundState).not.toHaveBeenCalled();
   });

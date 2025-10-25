@@ -155,7 +155,7 @@ describe("InMemoryRoundGateway", () => {
         phase: "prompt",
         startedAt: START_AT,
         seed: 0,
-      } as any),
+      }),
     ).rejects.toThrowError();
   });
 });

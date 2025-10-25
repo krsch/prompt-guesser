@@ -15,7 +15,7 @@ export class PhaseTimeout extends Command {
   }
 
   async execute(ctx: CommandContext): Promise<void> {
-    const { gateway, bus, config, logger, scheduler } = ctx;
+    const { gateway, bus, logger } = ctx;
     const state = await gateway.loadRoundState(this.roundId);
 
     if (state.phase !== (this.phase as RoundPhase)) {

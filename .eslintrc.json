@@ -1,0 +1,95 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "project": "./tsconfig.json",
+    "sourceType": "module"
+  },
+  "plugins": [
+    "@typescript-eslint",
+    "import",
+    "functional",
+    "boundaries"
+  ],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:@typescript-eslint/strict",
+    "plugin:import/recommended",
+    "plugin:import/typescript",
+    "plugin:functional/recommended",
+    "prettier"
+  ],
+  "settings": {
+    "boundaries/elements": [
+      { "type": "domain", "pattern": "src/domain/**" },
+      { "type": "adapter", "pattern": "src/adapters/**" },
+      { "type": "test", "pattern": "tests/**" }
+    ]
+  },
+  "rules": {
+    /** General TypeScript **/
+    "@typescript-eslint/explicit-function-return-type": "warn",
+    "@typescript-eslint/consistent-type-imports": ["warn", { "prefer": "type-imports" }],
+    "@typescript-eslint/no-floating-promises": "error",
+    "@typescript-eslint/no-misused-promises": ["error", { "checksVoidReturn": false }],
+
+    /** Functional rules (relaxed for DDD) **/
+    "functional/no-class": "off",
+    "functional/no-this-expression": "off",
+    "functional/prefer-readonly-type": "warn",
+    "functional/immutable-data": [
+      "warn",
+      {
+        "ignorePattern": ["^ctx", "^state"]
+      }
+    ],
+
+    /** Import hygiene **/
+    "import/order": [
+      "error",
+      {
+        "alphabetize": { "order": "asc", "caseInsensitive": true },
+        "groups": [["builtin", "external"], ["internal"], ["parent", "sibling", "index"]],
+        "newlines-between": "always"
+      }
+    ],
+    "import/no-cycle": ["error", { "maxDepth": 2 }],
+
+    /** Architectural layering **/
+    "boundaries/element-types": ["error", {
+      "default": "allow",
+      "rules": [
+        { "from": "adapter", "allow": ["adapter"] },
+        { "from": "domain", "disallow": ["adapter"] },
+        { "from": "test", "allow": ["domain", "adapter", "test"] }
+      ]
+    }],
+
+    /** Misc **/
+    "no-console": "warn",
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }]
+  },
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/",
+    "coverage/",
+    "*.config.js"
+  ],
+  "overrides": [
+    {
+      "files": ["tests/**/*", "**/*.test.ts"],
+      "env": {
+        "vitest": true,
+        "node": true
+      },
+      "rules": {
+        "@typescript-eslint/no-unused-vars": "off",
+        "no-console": "off",
+        "functional/immutable-data": "off",
+        "functional/prefer-readonly-type": "off"
+      }
+    }
+  ]
+}

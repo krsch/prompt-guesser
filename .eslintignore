@@ -1,0 +1,18 @@
+# Build artifacts
+dist/
+coverage/
+node_modules/
+
+# Config and tooling
+*.config.js
+*.config.cjs
+*.config.mjs
+*.config.ts
+
+# Docs and design notes
+docs/
+README.md
+
+# Temporary or local files
+.vscode/
+*.log

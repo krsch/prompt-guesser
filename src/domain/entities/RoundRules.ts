@@ -20,6 +20,7 @@ export function randomPermutation(n: number, rng: () => number): number[] {
   const permutation = Array.from({ length: n }, (_, index) => index);
   for (let i = n - 1; i > 0; i -= 1) {
     const j = Math.floor(rng() * (i + 1));
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     [permutation[i], permutation[j]] = [permutation[j]!, permutation[i]!];
   }
   return permutation;
@@ -60,6 +61,7 @@ export function promptIndexToPlayerId(
 export function assertValidRoundState(
   state: RoundState,
 ): asserts state is ValidRoundState {
+  /* eslint-disable @typescript-eslint/no-fallthrough */
   const fail = (reason: string): never => {
     throw new InvalidRoundStateError(reason, state);
   };
@@ -100,6 +102,7 @@ export function assertValidRoundState(
 
   // --- 2. Phase-specific invariants with progressive fallthrough -------------
   switch (state.phase) {
+    // @ts-ignore TS7029: intentional progressive validation fallthrough
     case "finished": {
       const scores = ensureDefined(state.scores, "missing scores");
 
@@ -109,9 +112,9 @@ export function assertValidRoundState(
         if (typeof val !== "number")
           fail(`invalid score value for ${pid}`);
       }
-      // fall through
     }
 
+    // @ts-ignore TS7029: intentional progressive validation fallthrough
     case "scoring": {
       const votes = ensureDefined(state.votes, "missing votes");
 
@@ -123,9 +126,9 @@ export function assertValidRoundState(
         if (!Number.isInteger(idx) || idx < 0)
           fail(`invalid vote index from ${pid}`);
       }
-      // fall through
     }
 
+    // @ts-ignore TS7029: intentional progressive validation fallthrough
     case "voting": {
       const shuffleOrder = ensureDefined(state.shuffleOrder, "missing shuffle order");
 
@@ -139,9 +142,9 @@ export function assertValidRoundState(
       );
       if (!arraysEqual(sorted, expected))
         fail("shuffle order is not a valid permutation");
-      // fall through
     }
 
+    // @ts-ignore TS7029: intentional progressive validation fallthrough
     case "guessing": {
       const prompts = ensureDefined(state.prompts, "missing prompts");
 
@@ -156,7 +159,6 @@ export function assertValidRoundState(
         if (typeof prompt !== "string")
           fail(`invalid prompt value from ${pid}`);
       }
-      // fall through
     }
 
     case "prompt": {

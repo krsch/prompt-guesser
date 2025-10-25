@@ -1,6 +1,6 @@
+import type { PlayerId, RoundId, TimePoint } from "../typedefs.js";
 import { Command, type CommandContext } from "./Command.js";
 import { transitionToGuessing } from "./PhaseTransitions.js";
-import type { PlayerId, RoundId, TimePoint } from "../typedefs.js";
 
 export class SubmitPrompt extends Command {
   readonly type = "SubmitPrompt" as const;
@@ -15,7 +15,7 @@ export class SubmitPrompt extends Command {
   }
 
   async execute(ctx: CommandContext): Promise<void> {
-    const { gateway, bus, imageGenerator, logger, config, scheduler } = ctx;
+    const { gateway, bus, imageGenerator, logger, config } = ctx;
     const state = await gateway.loadRoundState(this.roundId);
 
     if (state.phase !== "prompt") {

@@ -1,6 +1,7 @@
-import { Command, type CommandContext } from "./Command.js";
+/* eslint-disable functional/immutable-data */
 import { StartNewRoundInputError } from "../errors/StartNewRoundInputError.js";
 import type { PlayerId, TimePoint } from "../typedefs.js";
+import { Command, type CommandContext } from "./Command.js";
 const WHITESPACE_PATTERN = /\s/;
 
 /**
@@ -62,7 +63,8 @@ export class StartNewRound extends Command {
   private static validateStaticInvariants(
     players: readonly PlayerId[],
     activePlayer: PlayerId,
-  ): string[] {
+  ): readonly string[] {
+    // eslint-disable-next-line functional/prefer-readonly-type
     const issues: string[] = [];
 
     if (!Array.isArray(players) || players.length === 0) {
@@ -91,7 +93,7 @@ export class StartNewRound extends Command {
   private static validateAgainstConfig(
     players: readonly PlayerId[],
     config: CommandContext["config"],
-  ): string[] {
+  ): readonly string[] {
     if (players.length < config.minPlayers || players.length > config.maxPlayers) {
       return [
         `Players list must contain between ${config.minPlayers} and ${config.maxPlayers} players`,

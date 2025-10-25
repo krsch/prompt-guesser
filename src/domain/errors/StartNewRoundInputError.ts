@@ -12,7 +12,8 @@ export class StartNewRoundInputError extends Error {
       issues.length === 0
         ? "Invalid start new round input"
         : issues.length === 1
-          ? issues[0]!
+          ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            issues[0]!
           : `Invalid start new round input: ${issues.join("; ")}`;
     return new StartNewRoundInputError(message, issues);
   }

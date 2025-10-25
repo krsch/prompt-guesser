@@ -1,4 +1,5 @@
-import type { RoundId, PlayerId, TimePoint, RoundPhase } from "../typedefs.js";
+/* eslint-disable functional/prefer-readonly-type */
+import type { PlayerId, RoundId, RoundPhase, TimePoint } from "../typedefs.js";
 
 /**
  * The authoritative domain snapshot of a single round of the game.
@@ -6,13 +7,13 @@ import type { RoundId, PlayerId, TimePoint, RoundPhase } from "../typedefs.js";
  */
 export interface RoundState {
   /** Unique round identifier */
-  id: RoundId;
+  readonly id: RoundId;
 
   /** All participating players */
-  players: PlayerId[];
+  readonly players: readonly PlayerId[];
 
   /** The player providing the real prompt (active player) */
-  activePlayer: PlayerId;
+  readonly activePlayer: PlayerId;
 
   /** Current phase of this round */
   phase: RoundPhase;
@@ -39,13 +40,13 @@ export interface RoundState {
    * Deterministic permutation describing the order prompts should be revealed in voting.
    * Each entry points to an index in the submitted prompt list derived from {@link prompts}.
    */
-  shuffleOrder?: number[];
+  shuffleOrder?: readonly number[];
 
   /** Numeric seed used to derive deterministic randomness for this round. */
-  seed: number;
+  readonly seed: number;
 
   /** When the round started */
-  startedAt: TimePoint;
+  readonly startedAt: TimePoint;
 
   /** Generated image URL shared during the guessing phase */
   imageUrl?: string;
@@ -60,27 +61,27 @@ export interface RoundState {
 
 export type ValidRoundState =
   | (RoundState & {
-      phase: "prompt";
-      prompts: Record<PlayerId, string>;
+      readonly phase: "prompt";
+      readonly prompts: Record<PlayerId, string>;
     })
   | (RoundState & {
-      phase: "guessing";
-      prompts: Record<PlayerId, string>;
-      imageUrl: string;
+      readonly phase: "guessing";
+      readonly prompts: Record<PlayerId, string>;
+      readonly imageUrl: string;
     })
   | (RoundState & {
-      phase: "voting";
-      prompts: Record<PlayerId, string>;
-      imageUrl: string;
-      shuffleOrder: number[];
+      readonly phase: "voting";
+      readonly prompts: Record<PlayerId, string>;
+      readonly imageUrl: string;
+      readonly shuffleOrder: readonly number[];
     })
   | (RoundState & {
-      phase: "scoring" | "finished";
-      prompts: Record<PlayerId, string>;
-      imageUrl: string;
-      shuffleOrder: number[];
-      votes: Record<PlayerId, number>;
-      scores: Record<PlayerId, number>;
+      readonly phase: "scoring" | "finished";
+      readonly prompts: Record<PlayerId, string>;
+      readonly imageUrl: string;
+      readonly shuffleOrder: readonly number[];
+      readonly votes: Record<PlayerId, number>;
+      readonly scores: Record<PlayerId, number>;
     });
 
 /**
@@ -101,18 +102,18 @@ export type MutableRoundFields =
  */
 export interface PromptAppendResult {
   /** Whether a new prompt was inserted. False when the submission was a duplicate. */
-  inserted: boolean;
+  readonly inserted: boolean;
 
   /** Snapshot of all prompts after the append operation. */
-  prompts: Record<PlayerId, string>;
+  readonly prompts: Record<PlayerId, string>;
 }
 
 export interface VoteAppendResult {
   /** Whether the vote was newly inserted. */
-  inserted: boolean;
+  readonly inserted: boolean;
 
   /** Snapshot of all votes after the append operation. */
-  votes: Record<PlayerId, number>;
+  readonly votes: Record<PlayerId, number>;
 }
 
 export interface RoundGateway {
@@ -157,7 +158,7 @@ export interface RoundGateway {
    * The adapter generates a new round ID and returns the created state.
    */
   startNewRound(
-    players: PlayerId[],
+    players: readonly PlayerId[],
     activePlayer: PlayerId,
     startedAt: TimePoint,
   ): Promise<RoundState>;

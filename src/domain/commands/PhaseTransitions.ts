@@ -1,6 +1,6 @@
 import { generateShuffle, getShuffledPrompts } from "../entities/RoundRules.js";
 import type { CommandContext } from "./Command.js";
-import type { RoundState } from "../ports/RoundGateway.js";
+import type { RoundState, ValidRoundState } from "../ports/RoundGateway.js";
 import type { PlayerId, TimePoint } from "../typedefs.js";
 
 type PhaseTransitionContext = Pick<
@@ -35,7 +35,7 @@ export async function transitionToGuessing(
 }
 
 export async function transitionToVoting(
-  state: RoundState,
+  state: ValidRoundState,
   prompts: Record<PlayerId, string>,
   at: TimePoint,
   { gateway, bus, logger, config, scheduler }: PhaseTransitionContext,

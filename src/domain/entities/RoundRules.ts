@@ -1,6 +1,6 @@
+import { InvalidRoundStateError } from "../errors/InvalidRoundStateError.js";
 import type { RoundState, ValidRoundState } from "../ports/RoundGateway.js";
 import type { PlayerId, RoundPhase } from "../typedefs.js";
-import { InvalidRoundStateError } from "../errors/InvalidRoundStateError.js";
 
 function arraysEqual<T>(a: readonly T[], b: readonly T[]): boolean {
   if (a.length !== b.length) return false;
@@ -8,7 +8,7 @@ function arraysEqual<T>(a: readonly T[], b: readonly T[]): boolean {
 }
 
 export function mulberry32(seed: number) {
-  return function mulberry32Generator() {
+  return function mulberry32Generator(): number {
     let t = (seed += 0x6d2b79f5);
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
@@ -16,7 +16,7 @@ export function mulberry32(seed: number) {
   };
 }
 
-export function randomPermutation(n: number, rng: () => number): number[] {
+export function randomPermutation(n: number, rng: () => number): readonly number[] {
   const permutation = Array.from({ length: n }, (_, index) => index);
   for (let i = n - 1; i > 0; i -= 1) {
     const j = Math.floor(rng() * (i + 1));
@@ -26,21 +26,24 @@ export function randomPermutation(n: number, rng: () => number): number[] {
   return permutation;
 }
 
-export function canonicalSubmittedPlayers(state: RoundState): PlayerId[] {
+export function canonicalSubmittedPlayers(state: RoundState): readonly PlayerId[] {
   const prompts = state.prompts ?? {};
   return state.players.filter((playerId) => prompts[playerId] !== undefined);
 }
 
-export function generateShuffle(state: RoundState): number[] {
+export function generateShuffle(state: RoundState): readonly number[] {
   const submitted = canonicalSubmittedPlayers(state);
   const rng = mulberry32(state.seed);
   return randomPermutation(submitted.length, rng);
 }
 
-export function getShuffledPrompts(state: RoundState): string[] {
+export function getShuffledPrompts(state: ValidRoundState): readonly string[] {
   if (!state.shuffleOrder) return [];
   const submitted = canonicalSubmittedPlayers(state);
-  return state.shuffleOrder.map((index) => state.prompts?.[submitted[index]!]!);
+  if (!state.prompts) throw new InvalidRoundStateError("no prompts in the state", state);
+  const prompts = state.prompts;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  return state.shuffleOrder.map((index) => prompts[submitted[index]!]!);
 }
 
 export function promptIndexToPlayerId(
@@ -51,6 +54,7 @@ export function promptIndexToPlayerId(
   if (!Number.isInteger(index)) return undefined;
   if (index < 0 || index >= state.shuffleOrder.length) return undefined;
   const submitted = canonicalSubmittedPlayers(state);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const submittedIndex = state.shuffleOrder[index]!;
   return submitted[submittedIndex];
 }
@@ -61,7 +65,6 @@ export function promptIndexToPlayerId(
 export function assertValidRoundState(
   state: RoundState,
 ): asserts state is ValidRoundState {
-  /* eslint-disable @typescript-eslint/no-fallthrough */
   const fail = (reason: string): never => {
     throw new InvalidRoundStateError(reason, state);
   };
@@ -70,9 +73,6 @@ export function assertValidRoundState(
     if (value === undefined) throw new InvalidRoundStateError(reason, state);
     return value;
   };
-
-  const arraysEqual = <T>(a: readonly T[], b: readonly T[]) =>
-    a.length === b.length && a.every((v, i) => v === b[i]);
 
   // --- 1. Generic invariants -------------------------------------------------
   if (!Array.isArray(state.players) || state.players.length === 0)
@@ -97,7 +97,7 @@ export function assertValidRoundState(
 
   // --- 2. Phase-specific invariants with progressive fallthrough -------------
   switch (state.phase) {
-    // @ts-ignore TS7029: intentional progressive validation fallthrough
+    // @ts-expect-error TS7029: intentional progressive validation fallthrough
     case "finished": {
       const scores = ensureDefined(state.scores, "missing scores");
 
@@ -108,7 +108,7 @@ export function assertValidRoundState(
       }
     }
 
-    // @ts-ignore TS7029: intentional progressive validation fallthrough
+    // @ts-expect-error TS7029: intentional progressive validation fallthrough
     case "scoring": {
       const votes = ensureDefined(state.votes, "missing votes");
 
@@ -120,7 +120,7 @@ export function assertValidRoundState(
       }
     }
 
-    // @ts-ignore TS7029: intentional progressive validation fallthrough
+    // @ts-expect-error TS7029: intentional progressive validation fallthrough
     case "voting": {
       const shuffleOrder = ensureDefined(state.shuffleOrder, "missing shuffle order");
 
@@ -133,7 +133,7 @@ export function assertValidRoundState(
         fail("shuffle order is not a valid permutation");
     }
 
-    // @ts-ignore TS7029: intentional progressive validation fallthrough
+    // @ts-expect-error TS7029: intentional progressive validation fallthrough
     case "guessing": {
       const prompts = ensureDefined(state.prompts, "missing prompts");
 
@@ -148,6 +148,7 @@ export function assertValidRoundState(
       }
     }
 
+    /* eslint-disable-next-line no-fallthrough */
     case "prompt": {
       if (state.phase === "prompt" && state.prompts) {
         for (const pid of Object.keys(state.prompts)) {

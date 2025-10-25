@@ -1,6 +1,6 @@
+import type { PlayerId, RoundId, TimePoint } from "../typedefs.js";
 import { Command, type CommandContext } from "./Command.js";
 import { finalizeRound } from "./FinalizeRound.js";
-import type { PlayerId, RoundId, TimePoint } from "../typedefs.js";
 
 export class SubmitVote extends Command {
   readonly type = "SubmitVote" as const;
@@ -29,7 +29,7 @@ export class SubmitVote extends Command {
       throw new Error("Active player cannot vote in their own round");
     }
 
-    if (this.promptIndex < 0 || this.promptIndex >= state.shuffleOrder!.length) {
+    if (this.promptIndex < 0 || this.promptIndex >= state.shuffleOrder.length) {
       throw new Error("Invalid vote index");
     }
 

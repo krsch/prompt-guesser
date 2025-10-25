@@ -231,8 +231,7 @@ The production commands in `src/domain/commands` follow a consistent structure. 
 
 - **SubmitDecoy**
   - Ensures the round is in `guessing`, the player belongs to the round, and is not the active player.
-  - Persists the decoy; once every player has submitted a prompt the command transitions the round to `voting`, shuffling prompts
-    deterministically through the gateway and publishing `PromptsReady` / `PhaseChanged` events.
+  - Persists the decoy; once every player has submitted a prompt the command transitions the round to `voting`, generating a deterministic shuffle within the domain and publishing `PromptsReady` / `PhaseChanged` events.
   - Runtime scheduling logic can observe the phase change and queue the next timeout.
 
 - **SubmitVote**

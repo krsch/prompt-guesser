@@ -8,7 +8,7 @@
     /* ---------- Module & Target ---------- */
     "module": "ESNext",
     "target": "ES2020",
-    "moduleResolution": "Bundler",       // works with modern build tools (Vite, TS loaders)
+    "moduleResolution": "Bundler", // works with modern build tools (Vite, TS loaders)
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -21,8 +21,8 @@
     "noPropertyAccessFromIndexSignature": true,
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
-    "noUnusedLocals": false,              // disable for now; handled by ESLint
-    "noUnusedParameters": false,          // same — tests and commands often use placeholders
+    "noUnusedLocals": false, // disable for now; handled by ESLint
+    "noUnusedParameters": false, // same — tests and commands often use placeholders
 
     /* ---------- Source Maps & Declarations ---------- */
     "sourceMap": true,

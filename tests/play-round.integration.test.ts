@@ -66,7 +66,12 @@ describe("Integration: play a full round", () => {
     const roundId = roundStarted!.event.roundId as string;
 
     const promptTime = startedAt + 10_000;
-    await new SubmitPrompt(roundId, activePlayer, "A cat playing piano", promptTime).execute({
+    await new SubmitPrompt(
+      roundId,
+      activePlayer,
+      "A cat playing piano",
+      promptTime,
+    ).execute({
       gateway,
       bus,
       imageGenerator,
@@ -77,21 +82,36 @@ describe("Integration: play a full round", () => {
     const guessingEvents = events.filter((entry) => entry.event.type === "PhaseChanged");
     expect(guessingEvents.some((entry) => entry.event.phase === "guessing")).toBe(true);
 
-    await new SubmitDecoy(roundId, players[1], "A dog painting", promptTime + 1_000).execute({
+    await new SubmitDecoy(
+      roundId,
+      players[1],
+      "A dog painting",
+      promptTime + 1_000,
+    ).execute({
       gateway,
       bus,
       imageGenerator,
       config,
       scheduler,
     });
-    await new SubmitDecoy(roundId, players[2], "A rabbit skiing", promptTime + 2_000).execute({
+    await new SubmitDecoy(
+      roundId,
+      players[2],
+      "A rabbit skiing",
+      promptTime + 2_000,
+    ).execute({
       gateway,
       bus,
       imageGenerator,
       config,
       scheduler,
     });
-    await new SubmitDecoy(roundId, players[3], "A turtle surfing", promptTime + 3_000).execute({
+    await new SubmitDecoy(
+      roundId,
+      players[3],
+      "A turtle surfing",
+      promptTime + 3_000,
+    ).execute({
       gateway,
       bus,
       imageGenerator,
@@ -110,8 +130,8 @@ describe("Integration: play a full round", () => {
         "A turtle surfing",
       ]),
     );
-    const owners = promptsAfterShuffle.map((_, index) =>
-      promptIndexToPlayerId(roundStateAfterPrompts, index)!,
+    const owners = promptsAfterShuffle.map(
+      (_, index) => promptIndexToPlayerId(roundStateAfterPrompts, index)!,
     );
     expect(new Set(owners)).toEqual(new Set(players));
 
@@ -173,15 +193,12 @@ describe("Integration: play a full round", () => {
       .filter((entry) => entry.event.type === "PhaseChanged")
       .map((entry) => entry.event.phase);
 
-    expect(phases).toEqual([
-      "guessing",
-      "voting",
-      "scoring",
-    ]);
+    expect(phases).toEqual(["guessing", "voting", "scoring"]);
 
     expect(
       events.some(
-        (entry) => entry.event.type === "RoundFinished" && entry.event.roundId === roundId,
+        (entry) =>
+          entry.event.type === "RoundFinished" && entry.event.roundId === roundId,
       ),
     ).toBe(true);
     seedSpy.mockRestore();

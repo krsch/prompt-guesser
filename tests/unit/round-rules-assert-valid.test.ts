@@ -45,10 +45,7 @@ describe("assertValidRoundState", () => {
   });
 
   it("rejects duplicate player IDs", () => {
-    expectInvalidState(
-      { players: ["alice", "alice"] },
-      "duplicate player IDs",
-    );
+    expectInvalidState({ players: ["alice", "alice"] }, "duplicate player IDs");
   });
 
   it("rejects when active player is not listed", () => {
@@ -64,7 +61,10 @@ describe("assertValidRoundState", () => {
   });
 
   it("rejects when the seed is missing", () => {
-    expectInvalidState({ seed: Number.NaN } as Partial<RoundState>, "missing or invalid seed");
+    expectInvalidState(
+      { seed: Number.NaN } as Partial<RoundState>,
+      "missing or invalid seed",
+    );
   });
 
   it("rejects decoy prompts during prompt phase", () => {

@@ -12,14 +12,7 @@ import prettierConfig from "eslint-config-prettier";
 export default [
   // --- Ignore patterns (replaces .eslintignore) ---
   {
-    ignores: [
-      "dist/",
-      "node_modules/",
-      "coverage/",
-      "docs/",
-      "*.config.*",
-      "README.md"
-    ],
+    ignores: ["dist/", "node_modules/", "coverage/", "docs/", "*.config.*", "README.md"],
   },
 
   // --- TypeScript / project defaults ---
@@ -52,7 +45,10 @@ export default [
       "functional/no-class": "off",
       "functional/no-this-expression": "off",
       "functional/prefer-readonly-type": "warn",
-      "functional/immutable-data": ["warn", { ignoreIdentifierPattern: ["^ctx", "^state"] }],
+      "functional/immutable-data": [
+        "warn",
+        { ignoreIdentifierPattern: ["^ctx", "^state"] },
+      ],
 
       // --- Imports & layering ---
       "import/order": [

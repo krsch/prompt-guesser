@@ -76,15 +76,12 @@ describe("SubmitDecoy command", () => {
     expect(savedState.phase).toBe("voting");
     const derivedPrompts = getShuffledPrompts(savedState);
     expect(new Set(derivedPrompts)).toEqual(
-      new Set([
-        "real prompt",
-        "blue decoy",
-        "green decoy",
-        "orange decoy",
-      ]),
+      new Set(["real prompt", "blue decoy", "green decoy", "orange decoy"]),
     );
 
-    const promptsEvent = bus.publish.mock.calls.find(([, event]) => event.type === "PromptsReady");
+    const promptsEvent = bus.publish.mock.calls.find(
+      ([, event]) => event.type === "PromptsReady",
+    );
     expect(promptsEvent?.[0]).toBe(`round:${round.id}`);
     expect(promptsEvent?.[1]).toMatchObject({
       roundId: round.id,
@@ -243,5 +240,4 @@ describe("SubmitDecoy command", () => {
       }),
     ).rejects.toThrow(/Active player/);
   });
-
 });

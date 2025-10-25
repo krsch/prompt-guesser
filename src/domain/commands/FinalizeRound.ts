@@ -47,7 +47,7 @@ export async function finalizeRound(
     scores[state.activePlayer]! += 3;
   }
 
-  const newstate = {...state, scores, phase: "scoring"} as ValidRoundState;
+  const newstate = { ...state, scores, phase: "scoring" } as ValidRoundState;
 
   await gateway.saveRoundState(newstate);
   logger?.info?.("Round entering scoring", {
@@ -63,7 +63,7 @@ export async function finalizeRound(
     at,
   });
 
-  const finstate = {...newstate, phase: "finished", finishedAt: at} as ValidRoundState;
+  const finstate = { ...newstate, phase: "finished", finishedAt: at } as ValidRoundState;
   await gateway.saveRoundState(finstate);
 
   logger?.info?.("Round finished", {

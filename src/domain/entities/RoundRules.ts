@@ -66,10 +66,7 @@ export function assertValidRoundState(
     throw new InvalidRoundStateError(reason, state);
   };
 
-  const ensureDefined = <T>(
-    value: T | undefined,
-    reason: string,
-  ): T => {
+  const ensureDefined = <T>(value: T | undefined, reason: string): T => {
     if (value === undefined) throw new InvalidRoundStateError(reason, state);
     return value;
   };
@@ -80,8 +77,7 @@ export function assertValidRoundState(
   // --- 1. Generic invariants -------------------------------------------------
   if (!Array.isArray(state.players) || state.players.length === 0)
     fail("invalid or missing players");
-  if (new Set(state.players).size !== state.players.length)
-    fail("duplicate player IDs");
+  if (new Set(state.players).size !== state.players.length) fail("duplicate player IDs");
   if (!state.players.includes(state.activePlayer))
     fail("active player not in player list");
 
@@ -94,8 +90,7 @@ export function assertValidRoundState(
   ];
   if (!validPhases.includes(state.phase)) fail("invalid phase");
 
-  if (!state.startedAt || state.startedAt <= 0)
-    fail("missing or invalid start time");
+  if (!state.startedAt || state.startedAt <= 0) fail("missing or invalid start time");
 
   if (typeof state.seed !== "number" || !Number.isFinite(state.seed))
     fail("missing or invalid seed");
@@ -109,8 +104,7 @@ export function assertValidRoundState(
       for (const pid of state.players) {
         const val = scores[pid];
         if (val === undefined) fail(`missing score entry for ${pid}`);
-        if (typeof val !== "number")
-          fail(`invalid score value for ${pid}`);
+        if (typeof val !== "number") fail(`invalid score value for ${pid}`);
       }
     }
 
@@ -121,10 +115,8 @@ export function assertValidRoundState(
       for (const [pid, idx] of Object.entries(votes)) {
         if (!state.players.includes(pid as PlayerId))
           fail(`vote from unknown player ${pid}`);
-        if (pid === state.activePlayer)
-          fail("active player vote recorded");
-        if (!Number.isInteger(idx) || idx < 0)
-          fail(`invalid vote index from ${pid}`);
+        if (pid === state.activePlayer) fail("active player vote recorded");
+        if (!Number.isInteger(idx) || idx < 0) fail(`invalid vote index from ${pid}`);
       }
     }
 
@@ -136,10 +128,7 @@ export function assertValidRoundState(
         (pid) => state.prompts?.[pid] !== undefined,
       );
       const sorted = [...shuffleOrder].sort((a, b) => a - b);
-      const expected = Array.from(
-        { length: submittedPlayers.length },
-        (_, i) => i,
-      );
+      const expected = Array.from({ length: submittedPlayers.length }, (_, i) => i);
       if (!arraysEqual(sorted, expected))
         fail("shuffle order is not a valid permutation");
     }
@@ -148,24 +137,21 @@ export function assertValidRoundState(
     case "guessing": {
       const prompts = ensureDefined(state.prompts, "missing prompts");
 
-      if (typeof prompts[state.activePlayer] !== "string")
-        fail("missing real prompt");
+      if (typeof prompts[state.activePlayer] !== "string") fail("missing real prompt");
       if (!state.imageUrl || !/^https?:\/\//.test(state.imageUrl))
         fail("missing or invalid image URL");
 
       for (const [pid, prompt] of Object.entries(prompts)) {
         if (!state.players.includes(pid as PlayerId))
           fail(`prompt submitted by unknown player ${pid}`);
-        if (typeof prompt !== "string")
-          fail(`invalid prompt value from ${pid}`);
+        if (typeof prompt !== "string") fail(`invalid prompt value from ${pid}`);
       }
     }
 
     case "prompt": {
       if (state.phase === "prompt" && state.prompts) {
         for (const pid of Object.keys(state.prompts)) {
-          if (pid !== state.activePlayer)
-            fail("unexpected decoy prompt in prompt phase");
+          if (pid !== state.activePlayer) fail("unexpected decoy prompt in prompt phase");
         }
       }
       break;

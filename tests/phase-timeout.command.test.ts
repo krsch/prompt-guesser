@@ -69,7 +69,9 @@ describe("PhaseTimeout command", () => {
     const derivedPrompts = getShuffledPrompts(savedState);
     expect(new Set(derivedPrompts)).toEqual(new Set(["real", "decoy"]));
 
-    const promptsEvent = bus.publish.mock.calls.find(([, event]) => event.type === "PromptsReady");
+    const promptsEvent = bus.publish.mock.calls.find(
+      ([, event]) => event.type === "PromptsReady",
+    );
     expect(promptsEvent).toBeDefined();
     expect(promptsEvent?.[0]).toBe(`round:${round.id}`);
     expect(promptsEvent?.[1]).toMatchObject({

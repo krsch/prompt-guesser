@@ -6,4 +6,3 @@ export class RoundNotFoundError extends Error {
     this.name = "RoundNotFoundError";
   }
 }
-

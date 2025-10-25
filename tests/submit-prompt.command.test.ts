@@ -29,8 +29,7 @@ const makeScheduler = () =>
     scheduleTimeout: vi.fn(),
   }) satisfies Partial<Scheduler>;
 
-const makeConfig = () =>
-  GameConfig.withDefaults();
+const makeConfig = () => GameConfig.withDefaults();
 
 describe("SubmitPrompt command", () => {
   it("stores the prompt, generates the image, advances the phase to guessing and publishes events", async () => {
@@ -65,7 +64,11 @@ describe("SubmitPrompt command", () => {
     });
 
     expect(gateway.loadRoundState).toHaveBeenCalledWith(round.id);
-    expect(gateway.appendPrompt).toHaveBeenCalledWith(round.id, round.activePlayer, "real prompt");
+    expect(gateway.appendPrompt).toHaveBeenCalledWith(
+      round.id,
+      round.activePlayer,
+      "real prompt",
+    );
     expect(imageGenerator.generate).toHaveBeenCalledWith("real prompt");
     expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
     expect(gateway.saveRoundState).toHaveBeenCalledWith(

@@ -113,12 +113,16 @@ describe("StartNewRound command", () => {
 
   it("throws when the active player is not part of the round", async () => {
     const players = ["p1", "p2", "p3", "p4"];
-    expect(() => new StartNewRound(players, "p5", Date.now())).toThrow(StartNewRoundInputError);
+    expect(() => new StartNewRound(players, "p5", Date.now())).toThrow(
+      StartNewRoundInputError,
+    );
   });
 
   it("throws when players contain duplicates", () => {
     const players = ["p1", "p1", "p2", "p3"];
-    expect(() => new StartNewRound(players, "p1", Date.now())).toThrow(StartNewRoundInputError);
+    expect(() => new StartNewRound(players, "p1", Date.now())).toThrow(
+      StartNewRoundInputError,
+    );
   });
 
   it("throws when player identifiers contain whitespace", () => {

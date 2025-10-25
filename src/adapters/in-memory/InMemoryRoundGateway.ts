@@ -1,6 +1,4 @@
-import {
-  RoundNotFoundError,
-} from "../../domain/errors/index.js";
+import { RoundNotFoundError } from "../../domain/errors/index.js";
 import { assertValidRoundState } from "../../domain/entities/RoundRules.js";
 import type {
   PromptAppendResult,
@@ -121,9 +119,7 @@ export class InMemoryRoundGateway implements RoundGateway {
     return this.#clone(state);
   }
 
-
   #clone(state: ValidRoundState): ValidRoundState {
     return JSON.parse(JSON.stringify(state)) as ValidRoundState;
   }
 }
-

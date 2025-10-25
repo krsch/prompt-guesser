@@ -18,14 +18,16 @@ export class PhaseTimeout extends Command {
     const { gateway, bus, config, logger, scheduler } = ctx;
     const state = await gateway.loadRoundState(this.roundId);
 
-    if (state.phase !== this.phase as RoundPhase) {
+    if (state.phase !== (this.phase as RoundPhase)) {
       return;
     }
 
     if (this.phase === "prompt") {
       state.phase = "finished";
       state.finishedAt = this.at;
-      state.scores = Object.fromEntries(state.players.map((playerId) => [playerId, 0] as const));
+      state.scores = Object.fromEntries(
+        state.players.map((playerId) => [playerId, 0] as const),
+      );
 
       await gateway.saveRoundState(state);
 

@@ -216,5 +216,4 @@ describe("SubmitVote command", () => {
       }),
     ).rejects.toThrow(/part of this round/);
   });
-
 });

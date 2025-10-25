@@ -133,7 +133,7 @@ export interface RoundGateway {
   appendPrompt(
     roundId: RoundId,
     playerId: PlayerId,
-    prompt: string
+    prompt: string,
   ): Promise<PromptAppendResult>;
 
   /**
@@ -143,7 +143,7 @@ export interface RoundGateway {
   appendVote(
     roundId: RoundId,
     playerId: PlayerId,
-    promptIndex: number
+    promptIndex: number,
   ): Promise<VoteAppendResult>;
 
   /**
@@ -161,5 +161,4 @@ export interface RoundGateway {
     activePlayer: PlayerId,
     startedAt: TimePoint,
   ): Promise<RoundState>;
-
 }

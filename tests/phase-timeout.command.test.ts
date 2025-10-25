@@ -2,18 +2,29 @@ import { describe, expect, it } from "vitest";
 
 import { createCommandContext } from "./support/mocks.js";
 import { PhaseTimeout } from "../src/domain/commands/PhaseTimeout.js";
-import { getShuffledPrompts } from "../src/domain/entities/RoundRules.js";
-import type { RoundState } from "../src/domain/ports/RoundGateway.js";
+import {
+  assertValidRoundState,
+  getShuffledPrompts,
+} from "../src/domain/entities/RoundRules.js";
+import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 
-const roundBase = (overrides: Partial<RoundState>): RoundState => ({
+type RoundOverrides =
+  & Partial<Omit<RoundState, "prompts" | "votes">>
+  & {
+    readonly prompts?: Record<string, string>;
+    readonly votes?: Record<string, number>;
+  };
+
+const roundBase = (overrides: RoundOverrides = {}): RoundState => ({
   id: "round-7",
-  players: ["a", "b", "c", "d"],
+  players: ["a", "b", "c", "d"] as const satisfies readonly string[],
   activePlayer: "a",
   phase: "guessing",
   startedAt: Date.now() - 10_000,
-  prompts: { a: "real" },
+  prompts: { a: "real" } as Record<string, string>,
   seed: 1234,
-  votes: {},
+  votes: {} as Record<string, number>,
+  imageUrl: "https://example.com/image.png",
   ...overrides,
 });
 
@@ -26,23 +37,28 @@ describe("PhaseTimeout command", () => {
       prompts: { a: "real", b: "decoy" },
     });
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
 
     const command = new PhaseTimeout(round.id, "guessing", now);
     await command.execute(context);
 
     expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
     const [savedState] = gateway.saveRoundState.mock.calls[0] ?? [];
+    if (!savedState) {
+      throw new Error("Expected round state to be saved");
+    }
     expect(savedState.id).toBe(round.id);
     expect(savedState.phase).toBe("voting");
     expect(savedState.shuffleOrder).toBeDefined();
     expect(savedState.shuffleOrder).toHaveLength(2);
 
+    assertValidRoundState(savedState);
     const derivedPrompts = getShuffledPrompts(savedState);
     expect(new Set(derivedPrompts)).toEqual(new Set(["real", "decoy"]));
 
     const promptsEvent = bus.publish.mock.calls.find(
-      ([, event]) => event.type === "PromptsReady",
+      ([, event]: [string, object]) =>
+        (event as Record<string, unknown>)["type"] === "PromptsReady",
     );
     expect(promptsEvent).toBeDefined();
     expect(promptsEvent?.[0]).toBe(`round:${round.id}`);
@@ -51,7 +67,8 @@ describe("PhaseTimeout command", () => {
       votingDurationMs: config.votingDurationMs,
       at: now,
     });
-    expect(promptsEvent?.[1].prompts).toEqual(derivedPrompts);
+    const promptsPayload = promptsEvent?.[1] as Record<string, unknown> | undefined;
+    expect(promptsPayload?.["prompts"]).toEqual(derivedPrompts);
 
     expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
       type: "PhaseChanged",
@@ -74,7 +91,7 @@ describe("PhaseTimeout command", () => {
       prompts: {},
     });
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
 
     const command = new PhaseTimeout(round.id, "prompt", now);
     await command.execute(context);
@@ -107,7 +124,7 @@ describe("PhaseTimeout command", () => {
       votes: { b: 1 },
     });
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
 
     const command = new PhaseTimeout(round.id, "voting", now);
     await command.execute(context);
@@ -133,7 +150,7 @@ describe("PhaseTimeout command", () => {
     const now = Date.now();
     const round = roundBase({ phase: "voting" });
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
 
     const command = new PhaseTimeout(round.id, "guessing", now);
     await command.execute(context);

@@ -9,15 +9,16 @@ describe("StartNewRound command", () => {
     const context = createCommandContext();
     const { gateway, bus, config, scheduler } = context;
     const now = Date.now();
-    const players = ["p1", "p2", "p3", "p4"];
+    const players = ["p1", "p2", "p3", "p4"] as const satisfies readonly string[];
     const activePlayer = players[0];
 
     const roundState = {
       id: "round-1",
       players,
       activePlayer,
-      phase: "prompt",
+      phase: "prompt" as const,
       startedAt: now,
+      seed: 1,
     };
     gateway.startNewRound.mockResolvedValue(roundState);
 

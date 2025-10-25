@@ -1,21 +1,21 @@
 import { webcrypto } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
-import { InMemoryRoundGateway } from "../src/adapters/in-memory/InMemoryRoundGateway";
-import { StartNewRound } from "../src/domain/commands/StartNewRound";
-import { SubmitDecoy } from "../src/domain/commands/SubmitDecoy";
-import { SubmitPrompt } from "../src/domain/commands/SubmitPrompt";
-import { SubmitVote } from "../src/domain/commands/SubmitVote";
+import { InMemoryRoundGateway } from "../src/adapters/in-memory/InMemoryRoundGateway.js";
+import { StartNewRound } from "../src/domain/commands/StartNewRound.js";
+import { SubmitDecoy } from "../src/domain/commands/SubmitDecoy.js";
+import { SubmitPrompt } from "../src/domain/commands/SubmitPrompt.js";
+import { SubmitVote } from "../src/domain/commands/SubmitVote.js";
 import {
   getShuffledPrompts,
   promptIndexToPlayerId,
 } from "../src/domain/entities/RoundRules.js";
-import { GameConfig } from "../src/domain/GameConfig";
-import type { ImageGenerator } from "../src/domain/ports/ImageGenerator";
-import type { MessageBus } from "../src/domain/ports/MessageBus";
-import type { Scheduler } from "../src/domain/ports/Scheduler";
+import { GameConfig } from "../src/domain/GameConfig.js";
+import type { ImageGenerator } from "../src/domain/ports/ImageGenerator.js";
+import type { MessageBus } from "../src/domain/ports/MessageBus.js";
+import type { Scheduler } from "../src/domain/ports/Scheduler.js";
 
-const players = ["alex", "bailey", "casey", "devon"];
+const players = ["alex", "bailey", "casey", "devon"] as const satisfies readonly string[];
 const activePlayer = players[0];
 
 const imageGenerator: ImageGenerator = {
@@ -28,8 +28,10 @@ describe("Integration: play a full round", () => {
   it("walks through prompt, guessing and voting phases", async () => {
     const seedSpy = vi
       .spyOn(webcrypto, "getRandomValues")
-      .mockImplementation((array: Uint32Array) => {
-        array[0] = 0xface_b00c;
+      .mockImplementation(<T extends ArrayBufferView>(array: T) => {
+        if (array instanceof Uint32Array) {
+          array[0] = 0xface_b00c;
+        }
         return array;
       });
 
@@ -46,7 +48,7 @@ describe("Integration: play a full round", () => {
         }
 
         const payload = event as Record<string, unknown>;
-        const type = payload.type;
+        const type = payload["type"];
         if (typeof type !== "string") {
           throw new Error("Event payload must include a string type");
         }
@@ -76,7 +78,7 @@ describe("Integration: play a full round", () => {
 
     const roundStarted = events.find((entry) => entry.event.type === "RoundStarted");
     expect(roundStarted).toBeDefined();
-    const roundIdValue = roundStarted?.event.roundId;
+    const roundIdValue = roundStarted?.event["roundId"];
     if (typeof roundIdValue !== "string") {
       throw new Error("Round identifier should be a string");
     }
@@ -98,7 +100,7 @@ describe("Integration: play a full round", () => {
     });
 
     const guessingEvents = events.filter((entry) => entry.event.type === "PhaseChanged");
-    expect(guessingEvents.some((entry) => entry.event.phase === "guessing")).toBe(true);
+    expect(guessingEvents.some((entry) => entry.event["phase"] === "guessing")).toBe(true);
 
     await new SubmitDecoy(
       roundId,
@@ -125,7 +127,7 @@ describe("Integration: play a full round", () => {
       scheduler,
     });
     await new SubmitDecoy(
-      roundId as string,
+      roundId,
       players[3],
       "A turtle surfing",
       promptTime + 3_000,
@@ -214,14 +216,14 @@ describe("Integration: play a full round", () => {
 
     const phases = events
       .filter((entry) => entry.event.type === "PhaseChanged")
-      .map((entry) => entry.event.phase);
+      .map((entry) => entry.event["phase"]);
 
     expect(phases).toEqual(["guessing", "voting", "scoring"]);
 
     expect(
       events.some(
         (entry) =>
-          entry.event.type === "RoundFinished" && entry.event.roundId === roundId,
+          entry.event.type === "RoundFinished" && entry.event["roundId"] === roundId,
       ),
     ).toBe(true);
     seedSpy.mockRestore();

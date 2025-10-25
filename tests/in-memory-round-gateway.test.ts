@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { InMemoryRoundGateway } from "../src/adapters/in-memory/InMemoryRoundGateway.js";
 
-const PLAYERS = ["alice", "bob", "carol", "dave"];
+const PLAYERS = ["alice", "bob", "carol", "dave"] as const satisfies readonly string[];
 const ACTIVE = PLAYERS[0];
 
 const START_AT = Date.UTC(2024, 0, 1, 12, 0, 0);
 describe("InMemoryRoundGateway", () => {
   it("starts and persists a new round with initial state", async () => {
     const gateway = new InMemoryRoundGateway();
-    const round = await gateway.startNewRound(PLAYERS, ACTIVE, START_AT);
+    const round = await gateway.startNewRound([...PLAYERS], ACTIVE, START_AT);
 
     expect(round).toMatchObject({
       id: expect.stringMatching(/^round-/),
@@ -27,7 +27,7 @@ describe("InMemoryRoundGateway", () => {
 
   it("appends prompts atomically and returns the updated snapshot", async () => {
     const gateway = new InMemoryRoundGateway();
-    const { id } = await gateway.startNewRound(PLAYERS, ACTIVE, START_AT);
+    const { id } = await gateway.startNewRound([...PLAYERS], ACTIVE, START_AT);
 
     const countAfterActive = await gateway.appendPrompt(id, ACTIVE, "real prompt");
     expect(countAfterActive).toEqual({
@@ -66,7 +66,7 @@ describe("InMemoryRoundGateway", () => {
 
   it("appends votes atomically and returns the updated snapshot", async () => {
     const gateway = new InMemoryRoundGateway();
-    const { id } = await gateway.startNewRound(PLAYERS, ACTIVE, START_AT);
+    const { id } = await gateway.startNewRound([...PLAYERS], ACTIVE, START_AT);
 
     const firstVote = await gateway.appendVote(id, PLAYERS[1], 0);
     expect(firstVote).toEqual({
@@ -99,7 +99,7 @@ describe("InMemoryRoundGateway", () => {
 
   it("saves full round state snapshots", async () => {
     const gateway = new InMemoryRoundGateway();
-    const state = await gateway.startNewRound(PLAYERS, ACTIVE, START_AT);
+    const state = await gateway.startNewRound([...PLAYERS], ACTIVE, START_AT);
 
     await gateway.appendPrompt(state.id, ACTIVE, "real prompt");
 
@@ -124,7 +124,7 @@ describe("InMemoryRoundGateway", () => {
 
   it("counts submitted prompts", async () => {
     const gateway = new InMemoryRoundGateway();
-    const { id } = await gateway.startNewRound(PLAYERS, ACTIVE, START_AT);
+    const { id } = await gateway.startNewRound([...PLAYERS], ACTIVE, START_AT);
 
     expect(await gateway.countSubmittedPrompts(id)).toBe(0);
 

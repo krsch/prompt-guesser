@@ -2,12 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import { createCommandContext } from "./support/mocks.js";
 import { SubmitVote } from "../src/domain/commands/SubmitVote.js";
-import type { RoundState } from "../src/domain/ports/RoundGateway.js";
+import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 import type { PlayerId } from "../src/domain/typedefs.js";
 
-const PLAYERS = ["active", "blue", "green", "orange"] as const;
+const PLAYERS = ["active", "blue", "green", "orange"] as const satisfies readonly string[];
 
-const baseRound = (overrides: Partial<RoundState> = {}): RoundState => ({
+type RoundOverrides =
+  & Partial<Omit<RoundState, "prompts" | "votes">>
+  & {
+    readonly prompts?: Record<string, string>;
+    readonly votes?: Record<string, number>;
+  };
+
+const baseRound = (overrides: RoundOverrides = {}): RoundState => ({
   id: "round-123",
   players: [...PLAYERS],
   activePlayer: PLAYERS[0],
@@ -20,8 +27,9 @@ const baseRound = (overrides: Partial<RoundState> = {}): RoundState => ({
     [PLAYERS[3]]: "orange decoy",
   },
   shuffleOrder: [0, 1, 2, 3],
-  votes: {},
+  votes: {} as Record<string, number>,
   seed: 1234,
+  imageUrl: "https://example.com/image.png",
   ...overrides,
 });
 
@@ -30,16 +38,21 @@ describe("SubmitVote command", () => {
     const context = createCommandContext();
     const { gateway, bus, config } = context;
     const now = Date.now();
-    const round = baseRound({ votes: { [PLAYERS[1]]: 1, [PLAYERS[2]]: 2 } });
+    const round = baseRound({
+      votes: {
+        [PLAYERS[1]]: 1,
+        [PLAYERS[2]]: 2,
+      },
+    });
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
     gateway.appendVote.mockResolvedValue({
       inserted: true,
       votes: {
         [PLAYERS[1]]: 1,
         [PLAYERS[2]]: 2,
         [PLAYERS[3]]: 0,
-      },
+      } as Record<string, number>,
     });
 
     const command = new SubmitVote(round.id, PLAYERS[3], 0, now);
@@ -72,12 +85,12 @@ describe("SubmitVote command", () => {
     const now = Date.now();
     const round = baseRound();
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
     gateway.appendVote.mockResolvedValue({
       inserted: true,
       votes: {
         [PLAYERS[1]]: 1,
-      },
+      } as Record<string, number>,
     });
 
     const command = new SubmitVote(round.id, PLAYERS[1], 1, now);
@@ -91,13 +104,15 @@ describe("SubmitVote command", () => {
     const context = createCommandContext();
     const { gateway, bus, config } = context;
     const now = Date.now();
-    const round = baseRound({ votes: { [PLAYERS[1]]: 2 } });
+    const round = baseRound({
+      votes: { [PLAYERS[1]]: 2 },
+    });
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
 
     gateway.appendVote.mockResolvedValue({
       inserted: false,
-      votes: { [PLAYERS[1]]: 2 },
+      votes: { [PLAYERS[1]]: 2 } as Record<string, number>,
     });
 
     const command = new SubmitVote(round.id, PLAYERS[1], 2, now);
@@ -113,7 +128,7 @@ describe("SubmitVote command", () => {
     const { gateway, config } = context;
     const round = baseRound({ phase: "guessing" });
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
 
     const command = new SubmitVote(round.id, PLAYERS[1], 0, Date.now());
 
@@ -125,7 +140,7 @@ describe("SubmitVote command", () => {
     const { gateway, config } = context;
     const round = baseRound();
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
 
     const command = new SubmitVote(round.id, PLAYERS[1], 99, Date.now());
 
@@ -137,7 +152,7 @@ describe("SubmitVote command", () => {
     const { gateway, config } = context;
     const round = baseRound();
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
 
     const command = new SubmitVote(round.id, PLAYERS[0], 0, Date.now());
 
@@ -149,7 +164,7 @@ describe("SubmitVote command", () => {
     const { gateway, config } = context;
     const round = baseRound();
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
 
     const command = new SubmitVote(round.id, "stranger" as PlayerId, 0, Date.now());
 

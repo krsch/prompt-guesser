@@ -5,7 +5,7 @@ import {
   getShuffledPrompts,
   promptIndexToPlayerId,
 } from "../../src/domain/entities/RoundRules.js";
-import type { RoundState } from "../../src/domain/ports/RoundGateway.js";
+import type { RoundState, ValidRoundState } from "../../src/domain/ports/RoundGateway.js";
 
 const PLAYERS = ["giver", "blue", "green", "orange"] as const;
 
@@ -22,6 +22,7 @@ function makeState(overrides: Partial<RoundState> = {}): RoundState {
     },
     seed: 123456,
     startedAt: 1,
+    imageUrl: "https://example.com/image.png",
     shuffleOrder: undefined,
     ...overrides,
   } as RoundState;
@@ -53,8 +54,20 @@ describe("RoundRules deterministic shuffle", () => {
 
     const order = generateShuffle(state);
     expect(order).toHaveLength(2);
-    state.shuffleOrder = order;
-    const prompts = getShuffledPrompts(state);
+    if (!state.prompts) {
+      throw new Error("Expected prompts to be defined");
+    }
+    if (!state.imageUrl) {
+      throw new Error("Expected image URL to be defined");
+    }
+    const validState = {
+      ...state,
+      phase: "voting" as const,
+      shuffleOrder: order,
+      prompts: state.prompts,
+      imageUrl: state.imageUrl,
+    } satisfies ValidRoundState;
+    const prompts = getShuffledPrompts(validState);
     expect(new Set(prompts)).toEqual(new Set(["real", "green"]));
   });
 

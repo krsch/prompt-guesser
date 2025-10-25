@@ -2,19 +2,21 @@ import { describe, expect, it } from "vitest";
 
 import { createCommandContext } from "./support/mocks.js";
 import { SubmitPrompt } from "../src/domain/commands/SubmitPrompt.js";
-import type { RoundState } from "../src/domain/ports/RoundGateway.js";
+import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 
 describe("SubmitPrompt command", () => {
   it("stores the prompt, generates the image, advances the phase to guessing and publishes events", async () => {
     const context = createCommandContext();
     const { gateway, bus, imageGenerator, config, scheduler } = context;
     const now = Date.now();
-    const round: RoundState = {
+    const round: ValidRoundState = {
       id: "round-123",
       players: ["p1", "p2", "p3", "p4"],
       activePlayer: "p1",
       phase: "prompt",
       startedAt: now - 1000,
+      seed: 42,
+      prompts: {},
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
@@ -68,12 +70,15 @@ describe("SubmitPrompt command", () => {
     const context = createCommandContext();
     const { gateway, config, scheduler } = context;
     const now = Date.now();
-    const round: RoundState = {
+    const round: ValidRoundState = {
       id: "round-123",
       players: ["p1", "p2", "p3", "p4"],
       activePlayer: "p1",
       phase: "guessing",
       startedAt: now - 1000,
+      seed: 42,
+      prompts: { "p1": "real prompt" },
+      imageUrl: "https://example.com/image.png",
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
@@ -87,12 +92,14 @@ describe("SubmitPrompt command", () => {
     const context = createCommandContext();
     const { gateway, config, scheduler } = context;
     const now = Date.now();
-    const round: RoundState = {
+    const round: ValidRoundState = {
       id: "round-123",
       players: ["p1", "p2", "p3", "p4"],
       activePlayer: "p1",
       phase: "prompt",
       startedAt: now - 1000,
+      seed: 42,
+      prompts: {},
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
@@ -106,18 +113,20 @@ describe("SubmitPrompt command", () => {
     const context = createCommandContext();
     const { gateway, bus, imageGenerator, config, scheduler } = context;
     const now = Date.now();
-    const round: RoundState = {
+    const round: ValidRoundState = {
       id: "round-123",
       players: ["p1", "p2", "p3", "p4"],
       activePlayer: "p1",
       phase: "prompt",
       startedAt: now - 1000,
+      seed: 42,
+      prompts: {},
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
     gateway.appendPrompt.mockResolvedValue({
       inserted: true,
-      prompts: {},
+      prompts: {} as Record<string, string>,
     });
 
     const command = new SubmitPrompt(round.id, round.activePlayer, "real prompt", now);
@@ -132,12 +141,14 @@ describe("SubmitPrompt command", () => {
     const context = createCommandContext();
     const { gateway, bus, imageGenerator, config, scheduler } = context;
     const now = Date.now();
-    const round: RoundState = {
+    const round: ValidRoundState = {
       id: "round-123",
       players: ["p1", "p2", "p3", "p4"],
       activePlayer: "p1",
       phase: "prompt",
       startedAt: now - 1000,
+      seed: 42,
+      prompts: {},
     };
 
     gateway.loadRoundState.mockResolvedValue(round);

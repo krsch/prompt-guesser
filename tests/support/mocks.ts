@@ -7,13 +7,12 @@ import type { MessageBus } from "../../src/domain/ports/MessageBus.js";
 import type { RoundGateway } from "../../src/domain/ports/RoundGateway.js";
 import type { Scheduler } from "../../src/domain/ports/Scheduler.js";
 
-type Fn<T extends (...args: unknown[]) => unknown> = Mock<
-  Parameters<T>,
-  ReturnType<T>
->;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Fn<T extends (...args: any[]) => unknown> = Mock<T>;
 
-function createMock<T extends (...args: unknown[]) => unknown>(): Fn<T> {
-  return vi.fn<Parameters<T>, ReturnType<T>>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function createMock<T extends (...args: any[]) => unknown>(): Fn<T> {
+  return vi.fn<T>();
 }
 
 export interface RoundGatewayMock extends RoundGateway {
@@ -75,9 +74,7 @@ export interface CommandContextOverrides {
   readonly logger?: CommandContext["logger"];
 }
 
-export interface CommandContextMock
-  extends CommandContextOverrides,
-    CommandContext {
+export interface CommandContextMock extends CommandContext {
   readonly gateway: RoundGatewayMock;
   readonly bus: MessageBusMock;
   readonly imageGenerator: ImageGeneratorMock;
@@ -94,7 +91,7 @@ export function createCommandContext(
     imageGenerator: overrides.imageGenerator ?? createImageGeneratorMock(),
     scheduler: overrides.scheduler ?? createSchedulerMock(),
     config: overrides.config ?? GameConfig.withDefaults(),
-    logger: overrides.logger,
+    ...(overrides.logger !== undefined ? { logger: overrides.logger } : {}),
   } satisfies CommandContextMock;
 
   return context;

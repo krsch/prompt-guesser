@@ -1,22 +1,21 @@
-import { describe, it, expect, vi } from "vitest";
-
 import { webcrypto } from "node:crypto";
+import { describe, expect, it, vi } from "vitest";
 
-import { InMemoryRoundGateway } from "../src/adapters/in-memory/InMemoryRoundGateway";
-import { GameConfig } from "../src/domain/GameConfig";
-import { StartNewRound } from "../src/domain/commands/StartNewRound";
-import { SubmitPrompt } from "../src/domain/commands/SubmitPrompt";
-import { SubmitDecoy } from "../src/domain/commands/SubmitDecoy";
-import { SubmitVote } from "../src/domain/commands/SubmitVote";
-import type { MessageBus } from "../src/domain/ports/MessageBus";
-import type { ImageGenerator } from "../src/domain/ports/ImageGenerator";
-import type { Scheduler } from "../src/domain/ports/Scheduler";
+import { InMemoryRoundGateway } from "../src/adapters/in-memory/InMemoryRoundGateway.js";
+import { StartNewRound } from "../src/domain/commands/StartNewRound.js";
+import { SubmitDecoy } from "../src/domain/commands/SubmitDecoy.js";
+import { SubmitPrompt } from "../src/domain/commands/SubmitPrompt.js";
+import { SubmitVote } from "../src/domain/commands/SubmitVote.js";
 import {
   getShuffledPrompts,
   promptIndexToPlayerId,
 } from "../src/domain/entities/RoundRules.js";
+import { GameConfig } from "../src/domain/GameConfig.js";
+import type { ImageGenerator } from "../src/domain/ports/ImageGenerator.js";
+import type { MessageBus } from "../src/domain/ports/MessageBus.js";
+import type { Scheduler } from "../src/domain/ports/Scheduler.js";
 
-const players = ["alex", "bailey", "casey", "devon"];
+const players = ["alex", "bailey", "casey", "devon"] as const satisfies readonly string[];
 const activePlayer = players[0];
 
 const imageGenerator: ImageGenerator = {
@@ -29,16 +28,32 @@ describe("Integration: play a full round", () => {
   it("walks through prompt, guessing and voting phases", async () => {
     const seedSpy = vi
       .spyOn(webcrypto, "getRandomValues")
-      .mockImplementation((array: Uint32Array) => {
-        array[0] = 0xface_b00c;
+      .mockImplementation(<T extends ArrayBufferView>(array: T) => {
+        if (array instanceof Uint32Array) {
+          array[0] = 0xface_b00c;
+        }
         return array;
       });
 
     const gateway = new InMemoryRoundGateway();
-    const events: { channel: string; event: any }[] = [];
+    interface PublishedEvent extends Record<string, unknown> {
+      readonly type: string;
+    }
+
+    const events: Array<{ channel: string; event: PublishedEvent }> = [];
     const bus: MessageBus = {
       async publish(channel, event) {
-        events.push({ channel, event });
+        if (typeof event !== "object" || event === null) {
+          throw new Error("Event payload must be an object");
+        }
+
+        const payload = event as Record<string, unknown>;
+        const type = payload["type"];
+        if (typeof type !== "string") {
+          throw new Error("Event payload must include a string type");
+        }
+
+        events.push({ channel, event: { ...payload, type } });
       },
     };
 
@@ -63,10 +78,20 @@ describe("Integration: play a full round", () => {
 
     const roundStarted = events.find((entry) => entry.event.type === "RoundStarted");
     expect(roundStarted).toBeDefined();
-    const roundId = roundStarted!.event.roundId as string;
+    const roundIdValue = roundStarted?.event["roundId"];
+    if (typeof roundIdValue !== "string") {
+      throw new Error("Round identifier should be a string");
+    }
+
+    const roundId = roundIdValue;
 
     const promptTime = startedAt + 10_000;
-    await new SubmitPrompt(roundId, activePlayer, "A cat playing piano", promptTime).execute({
+    await new SubmitPrompt(
+      roundId,
+      activePlayer,
+      "A cat playing piano",
+      promptTime,
+    ).execute({
       gateway,
       bus,
       imageGenerator,
@@ -75,23 +100,40 @@ describe("Integration: play a full round", () => {
     });
 
     const guessingEvents = events.filter((entry) => entry.event.type === "PhaseChanged");
-    expect(guessingEvents.some((entry) => entry.event.phase === "guessing")).toBe(true);
+    expect(guessingEvents.some((entry) => entry.event["phase"] === "guessing")).toBe(
+      true,
+    );
 
-    await new SubmitDecoy(roundId, players[1], "A dog painting", promptTime + 1_000).execute({
+    await new SubmitDecoy(
+      roundId,
+      players[1],
+      "A dog painting",
+      promptTime + 1_000,
+    ).execute({
       gateway,
       bus,
       imageGenerator,
       config,
       scheduler,
     });
-    await new SubmitDecoy(roundId, players[2], "A rabbit skiing", promptTime + 2_000).execute({
+    await new SubmitDecoy(
+      roundId,
+      players[2],
+      "A rabbit skiing",
+      promptTime + 2_000,
+    ).execute({
       gateway,
       bus,
       imageGenerator,
       config,
       scheduler,
     });
-    await new SubmitDecoy(roundId, players[3], "A turtle surfing", promptTime + 3_000).execute({
+    await new SubmitDecoy(
+      roundId,
+      players[3],
+      "A turtle surfing",
+      promptTime + 3_000,
+    ).execute({
       gateway,
       bus,
       imageGenerator,
@@ -110,12 +152,17 @@ describe("Integration: play a full round", () => {
         "A turtle surfing",
       ]),
     );
-    const owners = promptsAfterShuffle.map((_, index) =>
-      promptIndexToPlayerId(roundStateAfterPrompts, index)!,
-    );
+    const owners = promptsAfterShuffle.map((_, index) => {
+      const owner = promptIndexToPlayerId(roundStateAfterPrompts, index);
+      if (!owner) {
+        throw new Error("Expected prompt owner to be defined");
+      }
+
+      return owner;
+    });
     expect(new Set(owners)).toEqual(new Set(players));
 
-    const voteIndexForPrompt = (prompt: string) => {
+    const voteIndexForPrompt = (prompt: string): number => {
       const index = promptsAfterShuffle.indexOf(prompt);
       expect(index).toBeGreaterThanOrEqual(0);
       return index;
@@ -171,17 +218,14 @@ describe("Integration: play a full round", () => {
 
     const phases = events
       .filter((entry) => entry.event.type === "PhaseChanged")
-      .map((entry) => entry.event.phase);
+      .map((entry) => entry.event["phase"]);
 
-    expect(phases).toEqual([
-      "guessing",
-      "voting",
-      "scoring",
-    ]);
+    expect(phases).toEqual(["guessing", "voting", "scoring"]);
 
     expect(
       events.some(
-        (entry) => entry.event.type === "RoundFinished" && entry.event.roundId === roundId,
+        (entry) =>
+          entry.event.type === "RoundFinished" && entry.event["roundId"] === roundId,
       ),
     ).toBe(true);
     seedSpy.mockRestore();

@@ -1,51 +1,22 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { SubmitPrompt } from "../src/domain/commands/SubmitPrompt";
-import type { RoundGateway, RoundState } from "../src/domain/ports/RoundGateway";
-import type { MessageBus } from "../src/domain/ports/MessageBus";
-import type { ImageGenerator } from "../src/domain/ports/ImageGenerator";
-import type { Scheduler } from "../src/domain/ports/Scheduler";
-import { GameConfig } from "../src/domain/GameConfig";
-
-const makeGateway = () =>
-  ({
-    loadRoundState: vi.fn(),
-    appendPrompt: vi.fn(),
-    saveRoundState: vi.fn(),
-  }) satisfies Partial<RoundGateway>;
-
-const makeBus = () =>
-  ({
-    publish: vi.fn(),
-  }) satisfies Partial<MessageBus>;
-
-const makeImageGenerator = () =>
-  ({
-    generate: vi.fn(),
-  }) satisfies Partial<ImageGenerator>;
-
-const makeScheduler = () =>
-  ({
-    scheduleTimeout: vi.fn(),
-  }) satisfies Partial<Scheduler>;
-
-const makeConfig = () =>
-  GameConfig.withDefaults();
+import { createCommandContext } from "./support/mocks.js";
+import { SubmitPrompt } from "../src/domain/commands/SubmitPrompt.js";
+import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 
 describe("SubmitPrompt command", () => {
   it("stores the prompt, generates the image, advances the phase to guessing and publishes events", async () => {
-    const gateway = makeGateway();
-    const bus = makeBus();
-    const imageGenerator = makeImageGenerator();
-    const config = makeConfig();
-    const scheduler = makeScheduler();
+    const context = createCommandContext();
+    const { gateway, bus, imageGenerator, config, scheduler } = context;
     const now = Date.now();
-    const round: RoundState = {
+    const round: ValidRoundState = {
       id: "round-123",
       players: ["p1", "p2", "p3", "p4"],
       activePlayer: "p1",
       phase: "prompt",
       startedAt: now - 1000,
+      seed: 42,
+      prompts: {},
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
@@ -56,16 +27,14 @@ describe("SubmitPrompt command", () => {
     imageGenerator.generate.mockResolvedValue("https://example.com/image.png");
 
     const command = new SubmitPrompt(round.id, round.activePlayer, "real prompt", now);
-    await command.execute({
-      gateway: gateway as RoundGateway,
-      bus: bus as MessageBus,
-      imageGenerator: imageGenerator as ImageGenerator,
-      config,
-      scheduler: scheduler as Scheduler,
-    });
+    await command.execute(context);
 
     expect(gateway.loadRoundState).toHaveBeenCalledWith(round.id);
-    expect(gateway.appendPrompt).toHaveBeenCalledWith(round.id, round.activePlayer, "real prompt");
+    expect(gateway.appendPrompt).toHaveBeenCalledWith(
+      round.id,
+      round.activePlayer,
+      "real prompt",
+    );
     expect(imageGenerator.generate).toHaveBeenCalledWith("real prompt");
     expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
     expect(gateway.saveRoundState).toHaveBeenCalledWith(
@@ -98,113 +67,88 @@ describe("SubmitPrompt command", () => {
   });
 
   it("throws when the round is not in the prompt phase", async () => {
-    const gateway = makeGateway();
-    const bus = makeBus();
-    const config = makeConfig();
-    const scheduler = makeScheduler();
+    const context = createCommandContext();
+    const { gateway, config, scheduler } = context;
     const now = Date.now();
-    const round: RoundState = {
+    const round: ValidRoundState = {
       id: "round-123",
       players: ["p1", "p2", "p3", "p4"],
       activePlayer: "p1",
       phase: "guessing",
       startedAt: now - 1000,
+      seed: 42,
+      prompts: { p1: "real prompt" },
+      imageUrl: "https://example.com/image.png",
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
 
     const command = new SubmitPrompt(round.id, round.activePlayer, "real prompt", now);
 
-    await expect(
-      command.execute({
-        gateway: gateway as RoundGateway,
-        bus: bus as MessageBus,
-        imageGenerator: makeImageGenerator() as ImageGenerator,
-        config,
-        scheduler: scheduler as Scheduler,
-      }),
-    ).rejects.toThrow(/prompt phase/);
+    await expect(command.execute(context)).rejects.toThrow(/prompt phase/);
   });
 
   it("throws when the submitting player is not the active player", async () => {
-    const gateway = makeGateway();
-    const bus = makeBus();
-    const config = makeConfig();
-    const scheduler = makeScheduler();
+    const context = createCommandContext();
+    const { gateway, config, scheduler } = context;
     const now = Date.now();
-    const round: RoundState = {
+    const round: ValidRoundState = {
       id: "round-123",
       players: ["p1", "p2", "p3", "p4"],
       activePlayer: "p1",
       phase: "prompt",
       startedAt: now - 1000,
+      seed: 42,
+      prompts: {},
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
 
     const command = new SubmitPrompt(round.id, "p2", "real prompt", now);
 
-    await expect(
-      command.execute({
-        gateway: gateway as RoundGateway,
-        bus: bus as MessageBus,
-        imageGenerator: makeImageGenerator() as ImageGenerator,
-        config,
-        scheduler: scheduler as Scheduler,
-      }),
-    ).rejects.toThrow(/active player/);
+    await expect(command.execute(context)).rejects.toThrow(/active player/);
   });
 
   it("throws if the prompt was not persisted", async () => {
-    const gateway = makeGateway();
-    const bus = makeBus();
-    const imageGenerator = makeImageGenerator();
-    const config = makeConfig();
-    const scheduler = makeScheduler();
+    const context = createCommandContext();
+    const { gateway, bus, imageGenerator, config, scheduler } = context;
     const now = Date.now();
-    const round: RoundState = {
+    const round: ValidRoundState = {
       id: "round-123",
       players: ["p1", "p2", "p3", "p4"],
       activePlayer: "p1",
       phase: "prompt",
       startedAt: now - 1000,
+      seed: 42,
+      prompts: {},
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
     gateway.appendPrompt.mockResolvedValue({
       inserted: true,
-      prompts: {},
+      prompts: {} as Record<string, string>,
     });
 
     const command = new SubmitPrompt(round.id, round.activePlayer, "real prompt", now);
 
-    await expect(
-      command.execute({
-        gateway: gateway as RoundGateway,
-        bus: bus as MessageBus,
-        imageGenerator: imageGenerator as ImageGenerator,
-        config,
-        scheduler: scheduler as Scheduler,
-      }),
-    ).rejects.toThrow(/persist/);
+    await expect(command.execute(context)).rejects.toThrow(/persist/);
     expect(imageGenerator.generate).not.toHaveBeenCalled();
     expect(gateway.saveRoundState).not.toHaveBeenCalled();
     expect(bus.publish).not.toHaveBeenCalled();
   });
 
   it("is idempotent when the prompt has already been stored", async () => {
-    const gateway = makeGateway();
-    const bus = makeBus();
-    const imageGenerator = makeImageGenerator();
-    const config = makeConfig();
-    const scheduler = makeScheduler();
+    const context = createCommandContext();
+    const { gateway, bus, imageGenerator, config, scheduler } = context;
     const now = Date.now();
-    const round: RoundState = {
+    const round: ValidRoundState = {
       id: "round-123",
       players: ["p1", "p2", "p3", "p4"],
       activePlayer: "p1",
       phase: "prompt",
       startedAt: now - 1000,
+      seed: 42,
+      prompts: {},
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
@@ -214,13 +158,7 @@ describe("SubmitPrompt command", () => {
     });
 
     const command = new SubmitPrompt(round.id, round.activePlayer, "real prompt", now);
-    await command.execute({
-      gateway: gateway as RoundGateway,
-      bus: bus as MessageBus,
-      imageGenerator: imageGenerator as ImageGenerator,
-      config,
-      scheduler: scheduler as Scheduler,
-    });
+    await command.execute(context);
 
     expect(imageGenerator.generate).not.toHaveBeenCalled();
     expect(gateway.saveRoundState).not.toHaveBeenCalled();

@@ -1,7 +1,7 @@
-import {
-  RoundNotFoundError,
-} from "../../domain/errors/index.js";
+/* eslint-disable functional/immutable-data */
+/* eslint-disable functional/prefer-readonly-type */
 import { assertValidRoundState } from "../../domain/entities/RoundRules.js";
+import { RoundNotFoundError } from "../../domain/errors/index.js";
 import type {
   PromptAppendResult,
   RoundGateway,
@@ -111,6 +111,7 @@ export class InMemoryRoundGateway implements RoundGateway {
       activePlayer,
       phase: "prompt",
       prompts: {},
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       seed: seedBuffer[0]!,
       startedAt,
     };
@@ -121,9 +122,7 @@ export class InMemoryRoundGateway implements RoundGateway {
     return this.#clone(state);
   }
 
-
   #clone(state: ValidRoundState): ValidRoundState {
     return JSON.parse(JSON.stringify(state)) as ValidRoundState;
   }
 }
-

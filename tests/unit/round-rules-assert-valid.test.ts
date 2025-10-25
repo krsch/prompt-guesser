@@ -1,33 +1,44 @@
-import { describe, expect, it, afterEach, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { InMemoryRoundGateway } from "../../src/adapters/in-memory/InMemoryRoundGateway.js";
 import { assertValidRoundState } from "../../src/domain/entities/RoundRules.js";
-import { InvalidRoundStateError } from "../../src/domain/errors/InvalidRoundStateError.js";
-import type { RoundPhase, RoundState } from "../../src/domain/ports/RoundGateway.js";
 import * as RoundRules from "../../src/domain/entities/RoundRules.js";
+import { InvalidRoundStateError } from "../../src/domain/errors/InvalidRoundStateError.js";
+import type { RoundState } from "../../src/domain/ports/RoundGateway.js";
+import type { RoundPhase } from "../../src/domain/typedefs.js";
+import { cloneState } from "../support/mocks.js";
 
-function makeState(overrides: Partial<RoundState> = {}): RoundState {
+const promptsOf = (value: Record<string, string>): Record<string, string> => value;
+const votesOf = (value: Record<string, number>): Record<string, number> => value;
+const scoresOf = (value: Record<string, number>): Record<string, number> => value;
+
+type RoundOverrides = Partial<Omit<RoundState, "prompts" | "votes" | "scores">> & {
+  readonly prompts?: Record<string, string>;
+  readonly votes?: Record<string, number>;
+  readonly scores?: Record<string, number>;
+};
+
+function makeState(overrides: RoundOverrides = {}): RoundState {
   return {
     id: "round-1",
-    players: ["alice", "bob"],
+    players: ["alice", "bob"] as const satisfies readonly string[],
     activePlayer: "alice",
     phase: "prompt",
-    prompts: {},
+    prompts: promptsOf({}),
     seed: 1,
     startedAt: 1,
     ...overrides,
   };
 }
 
-function expectInvalidState(overrides: Partial<RoundState>, reason: string): void {
+function expectInvalidState(overrides: RoundOverrides, reason: string): void {
   const state = makeState(overrides);
-  const error = (() => {
-    try {
-      assertValidRoundState(state);
-      return null;
-    } catch (err) {
-      return err as InvalidRoundStateError;
-    }
-  })();
+  let error: InvalidRoundStateError | null = null;
+  try {
+    assertValidRoundState(state);
+  } catch (err) {
+    error = err as InvalidRoundStateError;
+  }
 
   expect(error).toBeInstanceOf(InvalidRoundStateError);
   expect(error?.reason).toBe(reason);
@@ -45,10 +56,7 @@ describe("assertValidRoundState", () => {
   });
 
   it("rejects duplicate player IDs", () => {
-    expectInvalidState(
-      { players: ["alice", "alice"] },
-      "duplicate player IDs",
-    );
+    expectInvalidState({ players: ["alice", "alice"] }, "duplicate player IDs");
   });
 
   it("rejects when active player is not listed", () => {
@@ -64,12 +72,15 @@ describe("assertValidRoundState", () => {
   });
 
   it("rejects when the seed is missing", () => {
-    expectInvalidState({ seed: Number.NaN } as Partial<RoundState>, "missing or invalid seed");
+    expectInvalidState(
+      { seed: Number.NaN } as Partial<RoundState>,
+      "missing or invalid seed",
+    );
   });
 
   it("rejects decoy prompts during prompt phase", () => {
     expectInvalidState(
-      { prompts: { bob: "decoy" } },
+      { prompts: promptsOf({ bob: "decoy" }) },
       "unexpected decoy prompt in prompt phase",
     );
   });
@@ -78,10 +89,10 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "guessing",
-        prompts: {
+        prompts: promptsOf({
           alice: "real",
           charlie: "mystery",
-        } as RoundState["prompts"],
+        }),
         imageUrl: "https://example.com/image.png",
       },
       "prompt submitted by unknown player charlie",
@@ -92,10 +103,10 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "guessing",
-        prompts: {
+        prompts: promptsOf({
           alice: "real",
-          bob: 42,
-        } as unknown as RoundState["prompts"],
+          bob: 42 as unknown as string,
+        }),
         imageUrl: "https://example.com/image.png",
       },
       "invalid prompt value from bob",
@@ -106,7 +117,7 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "guessing",
-        prompts: { bob: "decoy" },
+        prompts: promptsOf({ bob: "decoy" }),
         imageUrl: "https://example.com/image.png",
       },
       "missing real prompt",
@@ -117,7 +128,7 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "guessing",
-        prompts: { alice: "real" },
+        prompts: promptsOf({ alice: "real" }),
         imageUrl: "notaurl",
       },
       "missing or invalid image URL",
@@ -128,7 +139,7 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "voting",
-        prompts: { alice: "real" },
+        prompts: promptsOf({ alice: "real" }),
         imageUrl: "https://example.com/image.png",
       },
       "missing shuffle order",
@@ -139,7 +150,7 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "voting",
-        prompts: { alice: "real" },
+        prompts: promptsOf({ alice: "real" }),
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0, 1],
       },
@@ -151,7 +162,7 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "voting",
-        prompts: { alice: "real", bob: "decoy" },
+        prompts: promptsOf({ alice: "real", bob: "decoy" }),
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0, Number.NaN],
       },
@@ -163,7 +174,7 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "voting",
-        prompts: { alice: "real", bob: "decoy" },
+        prompts: promptsOf({ alice: "real", bob: "decoy" }),
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0, 0],
       },
@@ -175,10 +186,10 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "finished",
-        prompts: { alice: "real" },
+        prompts: promptsOf({ alice: "real" }),
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0],
-        votes: { bob: 0 },
+        votes: votesOf({ bob: 0 }),
       },
       "missing scores",
     );
@@ -188,11 +199,11 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "finished",
-        prompts: { alice: "real" },
+        prompts: promptsOf({ alice: "real" }),
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0],
-        votes: { bob: 0 },
-        scores: { alice: 1 },
+        votes: votesOf({ bob: 0 }),
+        scores: scoresOf({ alice: 1 }),
       },
       "missing score entry for bob",
     );
@@ -202,10 +213,10 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "scoring",
-        prompts: { alice: "real" },
+        prompts: promptsOf({ alice: "real" }),
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0],
-        scores: { alice: 0, bob: 0 },
+        scores: scoresOf({ alice: 0, bob: 0 }),
       },
       "missing votes",
     );
@@ -215,11 +226,11 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "scoring",
-        prompts: { alice: "real" },
+        prompts: promptsOf({ alice: "real" }),
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0],
-        votes: { charlie: 0 } as RoundState["votes"],
-        scores: { alice: 0, bob: 0 },
+        votes: votesOf({ charlie: 0 }),
+        scores: scoresOf({ alice: 0, bob: 0 }),
       },
       "vote from unknown player charlie",
     );
@@ -229,11 +240,11 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "scoring",
-        prompts: { alice: "real" },
+        prompts: promptsOf({ alice: "real" }),
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0],
-        votes: { alice: 0 },
-        scores: { alice: 0, bob: 0 },
+        votes: votesOf({ alice: 0 }),
+        scores: scoresOf({ alice: 0, bob: 0 }),
       },
       "active player vote recorded",
     );
@@ -243,11 +254,11 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "scoring",
-        prompts: { alice: "real" },
+        prompts: promptsOf({ alice: "real" }),
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0],
-        votes: { bob: -1 },
-        scores: { alice: 0, bob: 0 },
+        votes: votesOf({ bob: -1 }),
+        scores: scoresOf({ alice: 0, bob: 0 }),
       },
       "invalid vote index from bob",
     );
@@ -257,10 +268,10 @@ describe("assertValidRoundState", () => {
     expectInvalidState(
       {
         phase: "scoring",
-        prompts: { alice: "real" },
+        prompts: promptsOf({ alice: "real" }),
         shuffleOrder: [0],
-        votes: { bob: 0 },
-        scores: { alice: 0, bob: 0 },
+        votes: votesOf({ bob: 0 }),
+        scores: scoresOf({ alice: 0, bob: 0 }),
       },
       "missing or invalid image URL",
     );
@@ -269,13 +280,13 @@ describe("assertValidRoundState", () => {
   it("does not mutate the provided state", () => {
     const state = makeState({
       phase: "scoring",
-      prompts: { alice: "real" },
+      prompts: promptsOf({ alice: "real" }),
       imageUrl: "https://example.com/image.png",
       shuffleOrder: [0],
-      votes: { bob: 0 },
-      scores: { alice: 1, bob: 2 },
+      votes: votesOf({ bob: 0 }),
+      scores: scoresOf({ alice: 1, bob: 2 }),
     });
-    const snapshot = structuredClone(state);
+    const snapshot = cloneState(state);
 
     expect(() => assertValidRoundState(state)).not.toThrow();
     expect(state).toEqual(snapshot);

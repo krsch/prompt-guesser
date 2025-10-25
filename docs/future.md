@@ -1,6 +1,6 @@
 # Prompt Guesser — Future Improvements & Optional Features (Companion to v0.1)
 
-This document collects design ideas, enhancements, and open questions for future versions of *Prompt Guesser*.  
+This document collects design ideas, enhancements, and open questions for future versions of _Prompt Guesser_.  
 All items are non-binding; inclusion does not imply commitment to implement.
 
 ---
@@ -8,27 +8,32 @@ All items are non-binding; inclusion does not imply commitment to implement.
 ## 1. Gameplay Enhancements
 
 ### 1.1 Prompt Fairness & Similarity
+
 - Add automated detection of overly similar decoy prompts.
 - Use semantic similarity (embeddings) or text rules to prevent near-duplicates.
 - Provide warnings or request resubmission when prompts are too close.
 
 ### 1.2 Mid-Game Joining
+
 - Allow new players to join an ongoing game.
 - Options:
   - Join as “spectator” until the next game.
   - Join mid-round but score from that point onward.
 
 ### 1.3 Difficulty & Themes
+
 - Introduce thematic categories (e.g., “fantasy,” “sci-fi,” “nature”).
 - Optionally provide a random theme for each round.
 - Add a “difficulty mode” that adjusts prompt complexity or time limits.
 
 ### 1.4 Multiple Images per Round
+
 - The Prompt Giver’s prompt could generate multiple images.
 - Guessers must identify which image matches the prompt.
 - Adds variety and reduces the effect of generation randomness.
 
 ### 1.5 Hint or Challenge Systems
+
 - “Hint Token” mechanic: Prompt Giver may reveal a subtle clue at a cost.
 - “Challenge Vote”: Guessers can dispute a prompt that seems invalid.
 
@@ -86,9 +91,9 @@ All items are non-binding; inclusion does not imply commitment to implement.
 
 ## 7. Experimental & Creative Modes
 
-- **Collaborative Mode:** Players collectively refine one evolving image.  
-- **Solo Challenge Mode:** One player faces AI-generated decoys.  
-- **AI Participant Mode:** The system contributes one decoy prompt automatically.  
+- **Collaborative Mode:** Players collectively refine one evolving image.
+- **Solo Challenge Mode:** One player faces AI-generated decoys.
+- **AI Participant Mode:** The system contributes one decoy prompt automatically.
 - **Custom Deck Mode:** Players predefine prompt lists or themes.
 
 ---
@@ -104,11 +109,10 @@ All items are non-binding; inclusion does not imply commitment to implement.
 
 ## 9. Potential Future Terms & Theming
 
-- Re-theme roles for different aesthetics (e.g., *Dreamer / Observers*, *Artist / Critics*).
+- Re-theme roles for different aesthetics (e.g., _Dreamer / Observers_, _Artist / Critics_).
 - Add visual themes (gallery, dreamscape, sci-fi lab).
 - Offer seasonal or community prompt packs.
 
 ---
 
 **End of Future Improvements Document**
-

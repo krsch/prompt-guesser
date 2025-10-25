@@ -1,8 +1,16 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    /* Testing environment */
     "types": ["vitest/globals", "node"],
-    "noEmit": true
+
+    /* Disable output */
+    "noEmit": true,
+
+    /* Ensure correct module resolution for tests */
+    "moduleResolution": "Bundler",
+    "rootDir": "."
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["dist", "node_modules", "coverage"]
 }

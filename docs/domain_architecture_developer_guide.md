@@ -72,10 +72,10 @@ export interface RoundState {
   activePlayer: PlayerId;
   phase: RoundPhase;
 
-  prompts?: Record<PlayerId, string>;     // set during guessing (active player's entry is real prompt)
-  shuffleOrder?: number[];                // set at transition to voting
-  votes?: Record<PlayerId, number>;       // set during voting (index into shuffled prompts)
-  scores?: Record<PlayerId, number>;      // set at scoring
+  prompts?: Record<PlayerId, string>; // set during guessing (active player's entry is real prompt)
+  shuffleOrder?: number[]; // set at transition to voting
+  votes?: Record<PlayerId, number>; // set during voting (index into shuffled prompts)
+  scores?: Record<PlayerId, number>; // set at scoring
 
   startedAt: TimePoint;
   imageUrl?: string;
@@ -106,8 +106,16 @@ export interface RoundGateway {
   saveRoundState(state: RoundState): Promise<void>; // adapters choose optimistic or diff-merge
 
   // Atomic mutations that return updated snapshots to avoid update-then-read
-  appendPrompt(roundId: RoundId, playerId: PlayerId, prompt: string): Promise<PromptAppendResult>;
-  appendVote(roundId: RoundId, playerId: PlayerId, promptIndex: number): Promise<VoteAppendResult>;
+  appendPrompt(
+    roundId: RoundId,
+    playerId: PlayerId,
+    prompt: string,
+  ): Promise<PromptAppendResult>;
+  appendVote(
+    roundId: RoundId,
+    playerId: PlayerId,
+    promptIndex: number,
+  ): Promise<VoteAppendResult>;
   countSubmittedPrompts(roundId: RoundId): Promise<number>;
 
   startNewRound(
@@ -275,17 +283,17 @@ The production commands in `src/domain/commands` follow a consistent structure. 
 ## 8.5 Timeout Scheduling Lifecycle
 
 **Purpose:**
-Explain *when and how* timeouts are scheduled after removing `*Deadline` fields from the domain state.
+Explain _when and how_ timeouts are scheduled after removing `*Deadline` fields from the domain state.
 All scheduling now happens through the **`Scheduler` port**, keeping the domain deterministic and wall-clock agnostic.
 
 ---
 
 ### 1. Principles
 
-* **Domain purity:** No command ever creates or measures real time.
-* **Runtime-managed timing:** The `Scheduler` port is the only layer that interacts with the clock or timers.
-* **Idempotency:** Each `PhaseTimeout` command checks the current phase before acting, so duplicate or delayed executions are harmless.
-* **Event isolation:** `MessageBus` events (e.g. `PhaseChanged`) are for the frontend only; the runtime never listens to them to drive timeouts.
+- **Domain purity:** No command ever creates or measures real time.
+- **Runtime-managed timing:** The `Scheduler` port is the only layer that interacts with the clock or timers.
+- **Idempotency:** Each `PhaseTimeout` command checks the current phase before acting, so duplicate or delayed executions are harmless.
+- **Event isolation:** `MessageBus` events (e.g. `PhaseChanged`) are for the frontend only; the runtime never listens to them to drive timeouts.
 
 ---
 
@@ -310,9 +318,9 @@ await scheduler.scheduleTimeout(round.id, "guessing", config.guessingDurationMs)
 
 ### 3. Runtime Responsibilities
 
-* **Startup / recovery:** On service start, the runtime may inspect persisted rounds and schedule any pending timeouts according to their current phase.
-* **Dispatch:** When the delay elapses, the scheduler dispatches a `PhaseTimeout` command whose `at` timestamp is filled by the scheduler itself.
-* **No rescheduling:** Normal flow requires no additional rescheduling. Only restarts or crash recovery trigger re-scheduling.
+- **Startup / recovery:** On service start, the runtime may inspect persisted rounds and schedule any pending timeouts according to their current phase.
+- **Dispatch:** When the delay elapses, the scheduler dispatches a `PhaseTimeout` command whose `at` timestamp is filled by the scheduler itself.
+- **No rescheduling:** Normal flow requires no additional rescheduling. Only restarts or crash recovery trigger re-scheduling.
 
 ---
 
@@ -332,10 +340,10 @@ This allows complete control over virtual time without fake timers or real delay
 
 ### 5. Summary
 
-* Timeouts are **scheduled externally**, never stored in state.
-* Each new phase automatically triggers its own timeout.
-* Commands remain deterministic, and duplicated schedules are safe.
-* The runtime hosts the scheduler; the domain defines only *when* a timeout should exist.
+- Timeouts are **scheduled externally**, never stored in state.
+- Each new phase automatically triggers its own timeout.
+- Commands remain deterministic, and duplicated schedules are safe.
+- The runtime hosts the scheduler; the domain defines only _when_ a timeout should exist.
 
 ---
 
@@ -383,4 +391,3 @@ This allows complete control over virtual time without fake timers or real delay
 ---
 
 **This guide is the source of truth for domain contributions.** If a change affects these contracts (ports/types), update this document first, then proceed with implementation PRs.
-

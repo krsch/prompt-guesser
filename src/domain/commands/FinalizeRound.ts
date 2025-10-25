@@ -1,11 +1,12 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { canonicalSubmittedPlayers } from "../entities/RoundRules.js";
 import type { Logger } from "../ports/Logger.js";
 import type { MessageBus } from "../ports/MessageBus.js";
-import type { RoundGateway, RoundState, ValidRoundState } from "../ports/RoundGateway.js";
+import type { RoundGateway, ValidRoundState } from "../ports/RoundGateway.js";
 import type { PlayerId, TimePoint } from "../typedefs.js";
 
 export async function finalizeRound(
-  state: ValidRoundState & { phase: "voting" },
+  state: ValidRoundState & { readonly phase: "voting" },
   at: TimePoint,
   gateway: RoundGateway,
   bus: MessageBus,
@@ -13,14 +14,14 @@ export async function finalizeRound(
   source: string = "FinalizeRound",
 ): Promise<void> {
   const submittedPlayers = canonicalSubmittedPlayers(state);
-  const shuffleOrder = state.shuffleOrder!;
+  const shuffleOrder = state.shuffleOrder;
 
   const scores: Record<PlayerId, number> = Object.fromEntries(
     state.players.map((playerId) => [playerId, 0]),
   );
 
-  const votes = state.votes!;
-  const voteEntries = Object.entries(votes) as [PlayerId, number][];
+  const votes = state.votes ?? {};
+  const voteEntries = Object.entries(votes) as readonly (readonly [PlayerId, number])[];
 
   const activeBaseIndex = submittedPlayers.indexOf(state.activePlayer);
   const realPromptIndex = shuffleOrder.indexOf(activeBaseIndex);
@@ -47,7 +48,7 @@ export async function finalizeRound(
     scores[state.activePlayer]! += 3;
   }
 
-  const newstate = {...state, scores, phase: "scoring"} as ValidRoundState;
+  const newstate = { ...state, scores, phase: "scoring" } as ValidRoundState;
 
   await gateway.saveRoundState(newstate);
   logger?.info?.("Round entering scoring", {
@@ -63,7 +64,7 @@ export async function finalizeRound(
     at,
   });
 
-  const finstate = {...newstate, phase: "finished", finishedAt: at} as ValidRoundState;
+  const finstate = { ...newstate, phase: "finished", finishedAt: at } as ValidRoundState;
   await gateway.saveRoundState(finstate);
 
   logger?.info?.("Round finished", {

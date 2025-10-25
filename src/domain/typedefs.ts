@@ -14,10 +14,4 @@ export type PlayerId = string;
 export type TimePoint = number;
 
 /** Round phase enumeration */
-export type RoundPhase =
-  | "prompt"
-  | "guessing"
-  | "voting"
-  | "scoring"
-  | "finished";
-
+export type RoundPhase = "prompt" | "guessing" | "voting" | "scoring" | "finished";

@@ -1,6 +1,7 @@
-import { Command, type CommandContext } from "./Command.js";
+/* eslint-disable functional/immutable-data */
 import { StartNewRoundInputError } from "../errors/StartNewRoundInputError.js";
 import type { PlayerId, TimePoint } from "../typedefs.js";
+import { Command, type CommandContext } from "./Command.js";
 const WHITESPACE_PATTERN = /\s/;
 
 /**
@@ -23,7 +24,13 @@ export class StartNewRound extends Command {
     }
   }
 
-  async execute({ gateway, bus, logger, config, scheduler }: CommandContext): Promise<void> {
+  async execute({
+    gateway,
+    bus,
+    logger,
+    config,
+    scheduler,
+  }: CommandContext): Promise<void> {
     const issues = StartNewRound.validateAgainstConfig(this.players, config);
     if (issues.length > 0) {
       throw StartNewRoundInputError.because(issues);
@@ -35,11 +42,7 @@ export class StartNewRound extends Command {
       this.at,
     );
 
-    await scheduler.scheduleTimeout(
-      round.id,
-      "prompt",
-      config.promptDurationMs,
-    );
+    await scheduler.scheduleTimeout(round.id, "prompt", config.promptDurationMs);
 
     logger?.info?.("Round started", {
       type: this.type,
@@ -60,7 +63,8 @@ export class StartNewRound extends Command {
   private static validateStaticInvariants(
     players: readonly PlayerId[],
     activePlayer: PlayerId,
-  ): string[] {
+  ): readonly string[] {
+    // eslint-disable-next-line functional/prefer-readonly-type
     const issues: string[] = [];
 
     if (!Array.isArray(players) || players.length === 0) {
@@ -89,7 +93,7 @@ export class StartNewRound extends Command {
   private static validateAgainstConfig(
     players: readonly PlayerId[],
     config: CommandContext["config"],
-  ): string[] {
+  ): readonly string[] {
     if (players.length < config.minPlayers || players.length > config.maxPlayers) {
       return [
         `Players list must contain between ${config.minPlayers} and ${config.maxPlayers} players`,

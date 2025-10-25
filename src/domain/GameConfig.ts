@@ -1,9 +1,9 @@
 export interface GameConfigOptions {
-  minPlayers: number;
-  maxPlayers: number;
-  promptDurationMs: number;
-  guessingDurationMs: number;
-  votingDurationMs: number;
+  readonly minPlayers: number;
+  readonly maxPlayers: number;
+  readonly promptDurationMs: number;
+  readonly guessingDurationMs: number;
+  readonly votingDurationMs: number;
 }
 
 export class GameConfig {

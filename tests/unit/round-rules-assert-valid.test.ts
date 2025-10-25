@@ -76,15 +76,29 @@ describe("assertValidRoundState", () => {
 
   it("rejects prompts from unknown players", () => {
     expectInvalidState(
-      { prompts: { charlie: "mystery" } as RoundState["prompts"] },
-      "prompt submitted by unknown player",
+      {
+        phase: "guessing",
+        prompts: {
+          alice: "real",
+          charlie: "mystery",
+        } as RoundState["prompts"],
+        imageUrl: "https://example.com/image.png",
+      },
+      "prompt submitted by unknown player charlie",
     );
   });
 
   it("rejects non-string prompt values", () => {
     expectInvalidState(
-      { prompts: { alice: 42 } as unknown as RoundState["prompts"] },
-      "invalid prompt value",
+      {
+        phase: "guessing",
+        prompts: {
+          alice: "real",
+          bob: 42,
+        } as unknown as RoundState["prompts"],
+        imageUrl: "https://example.com/image.png",
+      },
+      "invalid prompt value from bob",
     );
   });
 
@@ -116,7 +130,6 @@ describe("assertValidRoundState", () => {
         phase: "voting",
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
-        shuffleOrder: [],
       },
       "missing shuffle order",
     );
@@ -130,7 +143,7 @@ describe("assertValidRoundState", () => {
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0, 1],
       },
-      "shuffle order length mismatch",
+      "shuffle order is not a valid permutation",
     );
   });
 
@@ -142,7 +155,7 @@ describe("assertValidRoundState", () => {
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0, Number.NaN],
       },
-      "shuffle order contains invalid indices",
+      "shuffle order is not a valid permutation",
     );
   });
 
@@ -154,14 +167,14 @@ describe("assertValidRoundState", () => {
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0, 0],
       },
-      "shuffle order is not a permutation",
+      "shuffle order is not a valid permutation",
     );
   });
 
-  it("requires scores in the scoring phase", () => {
+  it("requires scores in the finished phase", () => {
     expectInvalidState(
       {
-        phase: "scoring",
+        phase: "finished",
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0],
@@ -174,14 +187,14 @@ describe("assertValidRoundState", () => {
   it("requires a score entry for every player", () => {
     expectInvalidState(
       {
-        phase: "scoring",
+        phase: "finished",
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0],
         votes: { bob: 0 },
         scores: { alice: 1 },
       },
-      "missing player score",
+      "missing score entry for bob",
     );
   });
 
@@ -208,7 +221,7 @@ describe("assertValidRoundState", () => {
         votes: { charlie: 0 } as RoundState["votes"],
         scores: { alice: 0, bob: 0 },
       },
-      "vote from unknown player",
+      "vote from unknown player charlie",
     );
   });
 
@@ -233,10 +246,10 @@ describe("assertValidRoundState", () => {
         prompts: { alice: "real" },
         imageUrl: "https://example.com/image.png",
         shuffleOrder: [0],
-        votes: { bob: 5 },
+        votes: { bob: -1 },
         scores: { alice: 0, bob: 0 },
       },
-      "invalid vote index recorded",
+      "invalid vote index from bob",
     );
   });
 

@@ -1,5 +1,3 @@
-import { webcrypto } from "node:crypto";
-
 import {
   RoundNotFoundError,
 } from "../../domain/errors/index.js";
@@ -8,6 +6,7 @@ import type {
   PromptAppendResult,
   RoundGateway,
   RoundState,
+  ValidRoundState,
   VoteAppendResult,
 } from "../../domain/ports/RoundGateway.js";
 import type { PlayerId, RoundId, TimePoint } from "../../domain/typedefs.js";
@@ -16,7 +15,7 @@ export class InMemoryRoundGateway implements RoundGateway {
   #rounds = new Map<RoundId, RoundState>();
   #nextId = 1;
 
-  async loadRoundState(roundId: RoundId): Promise<RoundState> {
+  async loadRoundState(roundId: RoundId): Promise<ValidRoundState> {
     const state = this.#rounds.get(roundId);
     if (!state) throw new RoundNotFoundError(roundId);
     assertValidRoundState(state);
@@ -26,9 +25,10 @@ export class InMemoryRoundGateway implements RoundGateway {
   async saveRoundState(state: RoundState): Promise<void> {
     const stored = this.#rounds.get(state.id);
     if (!stored) throw new RoundNotFoundError(state.id);
+    assertValidRoundState(stored);
 
-    state.prompts = stored.prompts;
-    state.votes = stored.votes;
+    if (stored.prompts) state.prompts = stored.prompts;
+    if (stored.votes) state.votes = stored.votes;
 
     assertValidRoundState(state);
 
@@ -103,7 +103,7 @@ export class InMemoryRoundGateway implements RoundGateway {
     startedAt: TimePoint,
   ): Promise<RoundState> {
     const seedBuffer = new Uint32Array(1);
-    webcrypto.getRandomValues(seedBuffer);
+    globalThis.crypto.getRandomValues(seedBuffer);
 
     const state: RoundState = {
       id: `round-${this.#nextId++}`,
@@ -122,8 +122,8 @@ export class InMemoryRoundGateway implements RoundGateway {
   }
 
 
-  #clone(state: RoundState): RoundState {
-    return JSON.parse(JSON.stringify(state)) as RoundState;
+  #clone(state: ValidRoundState): ValidRoundState {
+    return JSON.parse(JSON.stringify(state)) as ValidRoundState;
   }
 }
 

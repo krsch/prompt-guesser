@@ -1,4 +1,4 @@
-import type { RoundId, PlayerId, TimePoint } from "../typedefs.js";
+import type { RoundId, PlayerId, TimePoint, RoundPhase } from "../typedefs.js";
 
 /**
  * The authoritative domain snapshot of a single round of the game.
@@ -54,6 +54,35 @@ export interface RoundState {
   finishedAt?: TimePoint;
 }
 
+// -----------------------------------------------------------------------------
+//  ValidRoundState — Phase-dependent refinement of RoundState
+// -----------------------------------------------------------------------------
+
+export type ValidRoundState =
+  | (RoundState & {
+      phase: "prompt";
+      prompts: Record<PlayerId, string>;
+    })
+  | (RoundState & {
+      phase: "guessing";
+      prompts: Record<PlayerId, string>;
+      imageUrl: string;
+    })
+  | (RoundState & {
+      phase: "voting";
+      prompts: Record<PlayerId, string>;
+      imageUrl: string;
+      shuffleOrder: number[];
+    })
+  | (RoundState & {
+      phase: "scoring" | "finished";
+      prompts: Record<PlayerId, string>;
+      imageUrl: string;
+      shuffleOrder: number[];
+      votes: Record<PlayerId, number>;
+      scores: Record<PlayerId, number>;
+    });
+
 /**
  * Static metadata describing which RoundState fields may change concurrently.
  * Adapters can use this to build atomic updates and enforce mutability rules.
@@ -88,7 +117,7 @@ export interface VoteAppendResult {
 
 export interface RoundGateway {
   /** Load the full round state */
-  loadRoundState(roundId: RoundId): Promise<RoundState>;
+  loadRoundState(roundId: RoundId): Promise<ValidRoundState>;
 
   /**
    * Persist a complete round snapshot.

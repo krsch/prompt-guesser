@@ -14,7 +14,8 @@ export class SubmitPrompt extends Command {
     super();
   }
 
-  async execute({ gateway, bus, imageGenerator, logger, config, scheduler }: CommandContext): Promise<void> {
+  async execute(ctx: CommandContext): Promise<void> {
+    const { gateway, bus, imageGenerator, logger, config, scheduler } = ctx;
     const state = await gateway.loadRoundState(this.roundId);
 
     if (state.phase !== "prompt") {
@@ -62,12 +63,6 @@ export class SubmitPrompt extends Command {
       at: this.at,
     });
 
-    await transitionToGuessing(state, this.at, imageUrl, {
-      gateway,
-      bus,
-      logger,
-      config,
-      scheduler,
-    });
+    await transitionToGuessing(state, this.at, imageUrl, ctx);
   }
 }

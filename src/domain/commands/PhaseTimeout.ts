@@ -14,10 +14,11 @@ export class PhaseTimeout extends Command {
     super();
   }
 
-  async execute({ gateway, bus, config, logger, scheduler }: CommandContext): Promise<void> {
+  async execute(ctx: CommandContext): Promise<void> {
+    const { gateway, bus, config, logger, scheduler } = ctx;
     const state = await gateway.loadRoundState(this.roundId);
 
-    if (state.phase !== this.phase) {
+    if (state.phase !== this.phase as RoundPhase) {
       return;
     }
 
@@ -46,17 +47,11 @@ export class PhaseTimeout extends Command {
     if (this.phase === "guessing") {
       const prompts = state.prompts ?? {};
 
-      await transitionToVoting(state, prompts, this.at, {
-        gateway,
-        bus,
-        logger,
-        config,
-        scheduler,
-      });
+      await transitionToVoting(state, prompts, this.at, ctx);
       return;
     }
 
-    if (this.phase === "voting") {
+    if (state.phase === "voting") {
       await finalizeRound(state, this.at, gateway, bus, logger, this.type);
     }
   }

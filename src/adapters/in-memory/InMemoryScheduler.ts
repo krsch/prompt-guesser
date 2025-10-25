@@ -43,7 +43,10 @@ export class InMemoryScheduler implements Scheduler {
     const targetTime = this.#now + milliseconds;
 
     while (this.#queue.length > 0) {
-      const next = this.#queue[0]!;
+      const next = this.#queue[0];
+      if (!next) {
+        break;
+      }
       if (next.at > targetTime) {
         break;
       }

@@ -13,7 +13,6 @@ import type { ImageGenerator } from "../src/domain/ports/ImageGenerator";
 import type { Scheduler } from "../src/domain/ports/Scheduler";
 import {
   getShuffledPrompts,
-  canonicalSubmittedPlayers,
   promptIndexToPlayerId,
 } from "../src/domain/entities/RoundRules.js";
 
@@ -162,35 +161,12 @@ describe("Integration: play a full round", () => {
     const finalState = await gateway.loadRoundState(roundId);
     expect(finalState.phase).toBe("finished");
 
-    const expectedScores = Object.fromEntries(players.map((player) => [player, 0]));
-    const base = canonicalSubmittedPlayers(finalState);
-    const permutation = finalState.shuffleOrder ?? [];
-    const votes = finalState.votes ?? {};
-    const activeBaseIndex = base.indexOf(activePlayer);
-    const realPromptIndex = permutation.indexOf(activeBaseIndex);
-
-    let correctGuesses = 0;
-    for (const [voterId, index] of Object.entries(votes)) {
-      if (index === realPromptIndex) {
-        expectedScores[voterId]! += 3;
-        correctGuesses += 1;
-        continue;
-      }
-
-      const owner = base[permutation[index]!];
-      expectedScores[owner]! += 1;
-    }
-
-    const totalVotes = Object.keys(votes).length;
-    if (totalVotes > 0 && (correctGuesses === 0 || correctGuesses === totalVotes)) {
-      for (const voterId of Object.keys(votes)) {
-        expectedScores[voterId]! += 2;
-      }
-    } else if (correctGuesses > 0 && correctGuesses < totalVotes) {
-      expectedScores[activePlayer]! += 3;
-    }
-
-    expect(finalState.scores).toEqual(expectedScores);
+    expect(finalState.scores).toEqual({
+      alex: 3,
+      bailey: 4,
+      casey: 0,
+      devon: 1,
+    });
     expect(finalState.finishedAt).toBeDefined();
 
     const phases = events

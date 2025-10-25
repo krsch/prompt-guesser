@@ -1,11 +1,11 @@
 import { canonicalSubmittedPlayers } from "../entities/RoundRules.js";
 import type { Logger } from "../ports/Logger.js";
 import type { MessageBus } from "../ports/MessageBus.js";
-import type { RoundGateway, RoundState } from "../ports/RoundGateway.js";
+import type { RoundGateway, RoundState, ValidRoundState } from "../ports/RoundGateway.js";
 import type { PlayerId, TimePoint } from "../typedefs.js";
 
 export async function finalizeRound(
-  state: RoundState,
+  state: ValidRoundState & { phase: "voting" },
   at: TimePoint,
   gateway: RoundGateway,
   bus: MessageBus,
@@ -28,46 +28,43 @@ export async function finalizeRound(
   let correctGuesses = 0;
   for (const [voterId, voteIndex] of voteEntries) {
     if (voteIndex === realPromptIndex) {
-      scores[voterId] += 3;
+      scores[voterId]! += 3;
       correctGuesses += 1;
       continue;
     }
 
-    const ownerId = submittedPlayers[shuffleOrder[voteIndex]!];
-    scores[ownerId] += 1;
+    const ownerId = submittedPlayers[shuffleOrder[voteIndex]!]!;
+    scores[ownerId]! += 1;
   }
 
   const totalVotes = voteEntries.length;
 
   if (totalVotes > 0 && (correctGuesses === 0 || correctGuesses === totalVotes)) {
     for (const [voterId] of voteEntries) {
-      scores[voterId] += 2;
+      scores[voterId]! += 2;
     }
   } else if (correctGuesses > 0 && correctGuesses < totalVotes) {
-    scores[state.activePlayer] += 3;
+    scores[state.activePlayer]! += 3;
   }
 
-  state.scores = scores;
-  state.phase = "scoring";
+  const newstate = {...state, scores, phase: "scoring"} as ValidRoundState;
 
-  await gateway.saveRoundState(state);
+  await gateway.saveRoundState(newstate);
   logger?.info?.("Round entering scoring", {
     roundId: state.id,
     at,
     type: source,
-    phase: state.phase,
+    phase: newstate.phase,
   });
 
   await bus.publish(`round:${state.id}`, {
     type: "PhaseChanged",
-    phase: state.phase,
+    phase: newstate.phase,
     at,
   });
 
-  state.phase = "finished";
-  state.finishedAt = at;
-
-  await gateway.saveRoundState(state);
+  const finstate = {...newstate, phase: "finished", finishedAt: at} as ValidRoundState;
+  await gateway.saveRoundState(finstate);
 
   logger?.info?.("Round finished", {
     roundId: state.id,

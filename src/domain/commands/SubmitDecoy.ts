@@ -14,7 +14,8 @@ export class SubmitDecoy extends Command {
     super();
   }
 
-  async execute({ gateway, bus, config, logger, scheduler }: CommandContext): Promise<void> {
+  async execute(ctx: CommandContext): Promise<void> {
+    const { gateway, bus, config, logger, scheduler } = ctx;
     const state = await gateway.loadRoundState(this.roundId);
 
     if (state.phase !== "guessing") {
@@ -57,12 +58,6 @@ export class SubmitDecoy extends Command {
       return;
     }
 
-    await transitionToVoting(state, prompts, this.at, {
-      gateway,
-      bus,
-      logger,
-      config,
-      scheduler,
-    });
+    await transitionToVoting(state, prompts, this.at, ctx);
   }
 }

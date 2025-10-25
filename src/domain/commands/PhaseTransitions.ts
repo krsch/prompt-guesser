@@ -1,3 +1,4 @@
+import { generateShuffle, getShuffledPrompts } from "../entities/RoundRules.js";
 import type { CommandContext } from "./Command.js";
 import type { RoundState } from "../ports/RoundGateway.js";
 import type { PlayerId, TimePoint } from "../typedefs.js";
@@ -39,20 +40,14 @@ export async function transitionToVoting(
   at: TimePoint,
   { gateway, bus, logger, config, scheduler }: PhaseTransitionContext,
 ): Promise<void> {
-  const promptEntries = Object.entries(prompts) as [PlayerId, string][];
-
-  const shuffled = await gateway.shufflePrompts(state.id, promptEntries);
-
-  const shuffledPrompts = shuffled.map(([, prompt]) => prompt);
-  const shuffledPromptOwners = shuffled.map(([playerId]) => playerId);
-
   state.prompts = { ...prompts };
-  state.shuffledPrompts = shuffledPrompts;
-  state.shuffledPromptOwners = shuffledPromptOwners;
+  state.shuffleOrder = generateShuffle(state);
   state.phase = "voting";
   state.votes = {};
 
   await gateway.saveRoundState(state);
+
+  const shuffledPrompts = getShuffledPrompts(state);
 
   await scheduler.scheduleTimeout(state.id, "voting", config.votingDurationMs);
 

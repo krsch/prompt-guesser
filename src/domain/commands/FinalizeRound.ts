@@ -1,3 +1,4 @@
+import { canonicalSubmittedPlayers } from "../entities/RoundRules.js";
 import type { Logger } from "../ports/Logger.js";
 import type { MessageBus } from "../ports/MessageBus.js";
 import type { RoundGateway, RoundState } from "../ports/RoundGateway.js";
@@ -11,8 +12,8 @@ export async function finalizeRound(
   logger?: Logger,
   source: string = "FinalizeRound",
 ): Promise<void> {
-  const shuffledPrompts = state.shuffledPrompts!;
-  const shuffledPromptOwners = state.shuffledPromptOwners!;
+  const submittedPlayers = canonicalSubmittedPlayers(state);
+  const shuffleOrder = state.shuffleOrder!;
 
   const scores: Record<PlayerId, number> = Object.fromEntries(
     state.players.map((playerId) => [playerId, 0]),
@@ -21,9 +22,8 @@ export async function finalizeRound(
   const votes = state.votes!;
   const voteEntries = Object.entries(votes) as [PlayerId, number][];
 
-  const realPromptIndex = shuffledPromptOwners.findIndex(
-    (ownerId) => ownerId === state.activePlayer,
-  );
+  const activeBaseIndex = submittedPlayers.indexOf(state.activePlayer);
+  const realPromptIndex = shuffleOrder.indexOf(activeBaseIndex);
 
   let correctGuesses = 0;
   for (const [voterId, voteIndex] of voteEntries) {
@@ -33,7 +33,7 @@ export async function finalizeRound(
       continue;
     }
 
-    const ownerId = shuffledPromptOwners[voteIndex]!;
+    const ownerId = submittedPlayers[shuffleOrder[voteIndex]!];
     scores[ownerId] += 1;
   }
 

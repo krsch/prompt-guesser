@@ -5,13 +5,13 @@ import type { RoundGateway, RoundState } from "../src/domain/ports/RoundGateway"
 import type { MessageBus } from "../src/domain/ports/MessageBus";
 import { GameConfig } from "../src/domain/GameConfig";
 import type { Scheduler } from "../src/domain/ports/Scheduler";
+import { getShuffledPrompts } from "../src/domain/entities/RoundRules.js";
 
 const makeGateway = () =>
   ({
     loadRoundState: vi.fn(),
     appendPrompt: vi.fn(),
     saveRoundState: vi.fn(),
-    shufflePrompts: vi.fn((_, prompts: any[]) => prompts),
   }) satisfies Partial<RoundGateway>;
 
 const makeBus = () =>
@@ -46,6 +46,7 @@ describe("SubmitDecoy command", () => {
         [PLAYERS[2]]: "green decoy",
         [PLAYERS[3]]: "orange decoy",
       },
+      seed: 42,
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
@@ -69,40 +70,28 @@ describe("SubmitDecoy command", () => {
     });
 
     expect(gateway.appendPrompt).toHaveBeenCalledWith(round.id, PLAYERS[1], "blue decoy");
-    expect(gateway.shufflePrompts).toHaveBeenCalledWith(round.id, [
-      [PLAYERS[0], "real prompt"],
-      [PLAYERS[1], "blue decoy"],
-      [PLAYERS[2], "green decoy"],
-      [PLAYERS[3], "orange decoy"],
-    ]);
     expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
-    expect(gateway.saveRoundState).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: round.id,
-        phase: "voting",
-        prompts: {
-          [PLAYERS[0]]: "real prompt",
-          [PLAYERS[1]]: "blue decoy",
-          [PLAYERS[2]]: "green decoy",
-          [PLAYERS[3]]: "orange decoy",
-        },
-        shuffledPrompts: [
-          "real prompt",
-          "blue decoy",
-          "green decoy",
-          "orange decoy",
-        ],
-        shuffledPromptOwners: [...PLAYERS],
-      }),
+    const savedState = gateway.saveRoundState.mock.calls[0]![0] as RoundState;
+    expect(savedState.shuffleOrder).toBeDefined();
+    expect(savedState.phase).toBe("voting");
+    const derivedPrompts = getShuffledPrompts(savedState);
+    expect(new Set(derivedPrompts)).toEqual(
+      new Set([
+        "real prompt",
+        "blue decoy",
+        "green decoy",
+        "orange decoy",
+      ]),
     );
 
-    expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
-      type: "PromptsReady",
+    const promptsEvent = bus.publish.mock.calls.find(([, event]) => event.type === "PromptsReady");
+    expect(promptsEvent?.[0]).toBe(`round:${round.id}`);
+    expect(promptsEvent?.[1]).toMatchObject({
       roundId: round.id,
-      prompts: ["real prompt", "blue decoy", "green decoy", "orange decoy"],
       votingDurationMs: config.votingDurationMs,
       at: now,
     });
+    expect(promptsEvent?.[1].prompts).toEqual(derivedPrompts);
     expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
       type: "PhaseChanged",
       phase: "voting",
@@ -130,6 +119,7 @@ describe("SubmitDecoy command", () => {
       prompts: {
         [PLAYERS[0]]: "real prompt",
       },
+      seed: 42,
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
@@ -171,6 +161,7 @@ describe("SubmitDecoy command", () => {
         [PLAYERS[0]]: "real prompt",
         [PLAYERS[1]]: "blue decoy",
       },
+      seed: 42,
     };
 
     gateway.loadRoundState.mockResolvedValue(round);
@@ -207,6 +198,7 @@ describe("SubmitDecoy command", () => {
       activePlayer: PLAYERS[0],
       phase: "prompt",
       startedAt: now - 5_000,
+      seed: 42,
     };
 
     gateway.loadRoundState.mockResolvedValue(round);

@@ -24,19 +24,7 @@ export interface RoundState {
   prompts?: Record<PlayerId, string>;
 
   /**
-   * Randomized list of all prompts (real + decoys).
-   * Present when transitioning to voting phase.
-   */
-  shuffledPrompts?: string[];
-
-  /**
-   * Owners corresponding to each shuffled prompt.
-   * Mirrors the indices of {@link shuffledPrompts} for scoring.
-   */
-  shuffledPromptOwners?: PlayerId[];
-
-  /**
-   * Player votes, each pointing to an index in shuffledPrompts.
+   * Player votes, each pointing to an index in the derived shuffled prompt list.
    * Present during voting and later phases.
    */
   votes?: Record<PlayerId, number>;
@@ -46,6 +34,15 @@ export interface RoundState {
    * Persisted to make results queryable without recomputation.
    */
   scores?: Record<PlayerId, number>;
+
+  /**
+   * Deterministic permutation describing the order prompts should be revealed in voting.
+   * Each entry points to an index in the submitted prompt list derived from {@link prompts}.
+   */
+  shuffleOrder?: number[];
+
+  /** Numeric seed used to derive deterministic randomness for this round. */
+  seed: number;
 
   /** When the round started */
   startedAt: TimePoint;
@@ -65,8 +62,7 @@ export type MutableRoundFields =
   | "prompts"
   | "votes"
   | "phase"
-  | "shuffledPrompts"
-  | "shuffledPromptOwners"
+  | "shuffleOrder"
   | "scores"
   | "finishedAt";
 
@@ -137,13 +133,4 @@ export interface RoundGateway {
     startedAt: TimePoint,
   ): Promise<RoundState>;
 
-  /**
-   * Produce a deterministic shuffle for prompts to avoid leaking bias. The
-   * returned collection must be the same length as the input and preserve the
-   * association between prompt text and player.
-   */
-  shufflePrompts(
-    roundId: RoundId,
-    prompts: readonly (readonly [PlayerId, string])[],
-  ): Promise<readonly (readonly [PlayerId, string])[]>;
 }

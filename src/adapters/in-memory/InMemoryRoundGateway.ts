@@ -1,3 +1,5 @@
+import { webcrypto } from "node:crypto";
+
 import {
   RoundNotFoundError,
 } from "../../domain/errors/index.js";
@@ -100,12 +102,16 @@ export class InMemoryRoundGateway implements RoundGateway {
     activePlayer: PlayerId,
     startedAt: TimePoint,
   ): Promise<RoundState> {
+    const seedBuffer = new Uint32Array(1);
+    webcrypto.getRandomValues(seedBuffer);
+
     const state: RoundState = {
       id: `round-${this.#nextId++}`,
       players: [...players],
       activePlayer,
       phase: "prompt",
       prompts: {},
+      seed: seedBuffer[0]!,
       startedAt,
     };
 
@@ -113,18 +119,6 @@ export class InMemoryRoundGateway implements RoundGateway {
 
     this.#rounds.set(state.id, state);
     return this.#clone(state);
-  }
-
-  async shufflePrompts(
-    _roundId: RoundId,
-    prompts: readonly (readonly [PlayerId, string])[],
-  ): Promise<readonly (readonly [PlayerId, string])[]> {
-    const shuffled = prompts.map((entry) => [...entry] as [PlayerId, string]);
-    for (let i = shuffled.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
-    }
-    return shuffled;
   }
 
 

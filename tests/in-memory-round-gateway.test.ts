@@ -22,6 +22,7 @@ describe("InMemoryRoundGateway", () => {
       phase: "prompt",
       startedAt: START_AT,
       prompts: {},
+      seed: expect.any(Number),
     });
 
     const reloaded = await gateway.loadRoundState(round.id);
@@ -119,8 +120,7 @@ describe("InMemoryRoundGateway", () => {
     const updated = {
       ...state,
       phase: "guessing" as const,
-      shuffledPrompts: ["real"],
-      shuffledPromptOwners: [ACTIVE],
+      shuffleOrder: [0],
       imageUrl: "https://example.com/image.png",
       prompts: { [ACTIVE]: "real prompt" },
     };
@@ -130,8 +130,7 @@ describe("InMemoryRoundGateway", () => {
     const reloaded = await gateway.loadRoundState(state.id);
     expect(reloaded).toMatchObject({
       phase: "guessing",
-      shuffledPrompts: ["real"],
-      shuffledPromptOwners: [ACTIVE],
+      shuffleOrder: [0],
       imageUrl: "https://example.com/image.png",
       prompts: {},
     });
@@ -173,6 +172,7 @@ describe("InMemoryRoundGateway", () => {
         activePlayer: ACTIVE,
         phase: "prompt",
         startedAt: START_AT,
+        seed: 0,
       } as any),
     ).rejects.toThrowError();
   });

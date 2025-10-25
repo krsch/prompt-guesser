@@ -29,7 +29,7 @@ export class SubmitVote extends Command {
       throw new Error("Active player cannot vote in their own round");
     }
 
-    if (this.promptIndex < 0 || this.promptIndex >= state.shuffledPrompts!.length) {
+    if (this.promptIndex < 0 || this.promptIndex >= state.shuffleOrder!.length) {
       throw new Error("Invalid vote index");
     }
 

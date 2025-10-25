@@ -34,14 +34,9 @@ const baseRound = (overrides: Partial<RoundState> = {}): RoundState => ({
     [PLAYERS[2]]: "green decoy",
     [PLAYERS[3]]: "orange decoy",
   },
-  shuffledPrompts: [
-    "real prompt",
-    "blue decoy",
-    "green decoy",
-    "orange decoy",
-  ],
-  shuffledPromptOwners: [...PLAYERS],
+  shuffleOrder: [0, 1, 2, 3],
   votes: {},
+  seed: 1234,
   ...overrides,
 });
 

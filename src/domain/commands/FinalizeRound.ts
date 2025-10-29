@@ -1,18 +1,19 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { canonicalSubmittedPlayers } from "../entities/RoundRules.js";
-import type { Logger } from "../ports/Logger.js";
-import type { MessageBus } from "../ports/MessageBus.js";
-import type { RoundGateway, ValidRoundState } from "../ports/RoundGateway.js";
+import type { GameState } from "../ports/GameGateway.js";
+import type { ValidRoundState } from "../ports/RoundGateway.js";
 import type { PlayerId, TimePoint } from "../typedefs.js";
+import type { CommandContext } from "./Command.js";
+import { dispatchCommand } from "./dispatchCommand.js";
+import { StartNextRound } from "./StartNextRound.js";
 
 export async function finalizeRound(
   state: ValidRoundState & { readonly phase: "voting" },
   at: TimePoint,
-  gateway: RoundGateway,
-  bus: MessageBus,
-  logger?: Logger,
+  ctx: CommandContext,
   source: string = "FinalizeRound",
 ): Promise<void> {
+  const { roundGateway, bus, logger, gameGateway } = ctx;
   const submittedPlayers = canonicalSubmittedPlayers(state);
   const shuffleOrder = state.shuffleOrder;
 
@@ -50,7 +51,7 @@ export async function finalizeRound(
 
   const newstate = { ...state, scores, phase: "scoring" } as ValidRoundState;
 
-  await gateway.saveRoundState(newstate);
+  await roundGateway.saveRoundState(newstate);
   logger?.info?.("Round entering scoring", {
     roundId: state.id,
     at,
@@ -65,7 +66,7 @@ export async function finalizeRound(
   });
 
   const finstate = { ...newstate, phase: "finished", finishedAt: at } as ValidRoundState;
-  await gateway.saveRoundState(finstate);
+  await roundGateway.saveRoundState(finstate);
 
   logger?.info?.("Round finished", {
     roundId: state.id,
@@ -74,9 +75,59 @@ export async function finalizeRound(
   });
 
   await bus.publish(`round:${state.id}`, {
+    type: "PhaseChanged",
+    phase: "finished",
+    at,
+  });
+
+  await bus.publish(`round:${state.id}`, {
     type: "RoundFinished",
     roundId: state.id,
     at,
     scores,
   });
+
+  const game = await gameGateway.loadGameState(state.gameId);
+  await updateGameAfterRound(game, finstate, scores, at, ctx);
+}
+
+export async function updateGameAfterRound(
+  game: GameState,
+  round: ValidRoundState | { readonly id: string },
+  scores: Record<PlayerId, number>,
+  at: TimePoint,
+  ctx: CommandContext,
+): Promise<void> {
+  const { gameGateway, logger } = ctx;
+
+  for (const player of Object.keys(scores)) {
+    if (game.cumulativeScores[player] === undefined) {
+      game.cumulativeScores[player] = 0;
+    }
+    game.cumulativeScores[player]! += scores[player]!;
+  }
+
+  game.activeRoundId = undefined;
+  game.currentRoundIndex += 1;
+
+  const roundsRemaining = game.currentRoundIndex < game.config.totalRounds;
+
+  if (!roundsRemaining) {
+    game.phase = "finished";
+  }
+
+  await gameGateway.saveGameState(game);
+
+  logger?.info?.("Game state updated after round", {
+    type: "FinalizeRound",
+    gameId: game.id,
+    roundId: round.id,
+    at,
+    phase: game.phase,
+  });
+
+  if (roundsRemaining) {
+    const command = new StartNextRound(game.id, at);
+    await dispatchCommand(command, ctx);
+  }
 }

@@ -15,8 +15,8 @@ export class SubmitDecoy extends Command {
   }
 
   async execute(ctx: CommandContext): Promise<void> {
-    const { gateway, logger } = ctx;
-    const state = await gateway.loadRoundState(this.roundId);
+    const { roundGateway, logger, gameGateway } = ctx;
+    const state = await roundGateway.loadRoundState(this.roundId);
 
     if (state.phase !== "guessing") {
       throw new Error("Cannot submit decoy when round is not in guessing phase");
@@ -30,7 +30,7 @@ export class SubmitDecoy extends Command {
       throw new Error("Active player cannot submit a decoy prompt");
     }
 
-    const { inserted, prompts } = await gateway.appendPrompt(
+    const { inserted, prompts } = await roundGateway.appendPrompt(
       this.roundId,
       this.playerId,
       this.prompt,
@@ -58,6 +58,8 @@ export class SubmitDecoy extends Command {
       return;
     }
 
-    await transitionToVoting(state, prompts, this.at, ctx);
+    const game = await gameGateway.loadGameState(state.gameId);
+
+    await transitionToVoting(state, prompts, this.at, ctx, game.config);
   }
 }

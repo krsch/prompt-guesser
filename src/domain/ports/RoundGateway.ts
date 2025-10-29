@@ -1,4 +1,5 @@
 /* eslint-disable functional/prefer-readonly-type */
+import type { GameId } from "./GameGateway.js";
 import type { PlayerId, RoundId, RoundPhase, TimePoint } from "../typedefs.js";
 
 /**
@@ -8,6 +9,9 @@ import type { PlayerId, RoundId, RoundPhase, TimePoint } from "../typedefs.js";
 export interface RoundState {
   /** Unique round identifier */
   readonly id: RoundId;
+
+  /** Identifier of the parent game aggregate */
+  readonly gameId: GameId;
 
   /** All participating players */
   readonly players: readonly PlayerId[];
@@ -158,6 +162,7 @@ export interface RoundGateway {
    * The adapter generates a new round ID and returns the created state.
    */
   startNewRound(
+    gameId: GameId,
     players: readonly PlayerId[],
     activePlayer: PlayerId,
     startedAt: TimePoint,

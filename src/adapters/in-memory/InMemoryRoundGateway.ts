@@ -2,6 +2,7 @@
 /* eslint-disable functional/prefer-readonly-type */
 import { assertValidRoundState } from "../../domain/entities/RoundRules.js";
 import { RoundNotFoundError } from "../../domain/errors/index.js";
+import type { GameId } from "../../domain/ports/GameGateway.js";
 import type {
   PromptAppendResult,
   RoundGateway,
@@ -98,6 +99,7 @@ export class InMemoryRoundGateway implements RoundGateway {
   }
 
   async startNewRound(
+    gameId: GameId,
     players: PlayerId[],
     activePlayer: PlayerId,
     startedAt: TimePoint,
@@ -107,6 +109,7 @@ export class InMemoryRoundGateway implements RoundGateway {
 
     const state: RoundState = {
       id: `round-${this.#nextId++}`,
+      gameId,
       players: [...players],
       activePlayer,
       phase: "prompt",

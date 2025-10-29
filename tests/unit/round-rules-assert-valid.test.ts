@@ -300,7 +300,7 @@ describe("gateway integration", () => {
 
   it("propagates validation errors when loading", async () => {
     const gateway = new InMemoryRoundGateway();
-    const round = await gateway.startNewRound(["alice", "bob"], "alice", 1);
+    const round = await gateway.startNewRound("game-1", ["alice", "bob"], "alice", 1);
 
     vi.spyOn(RoundRules, "assertValidRoundState").mockImplementation(() => {
       throw new InvalidRoundStateError("boom", round);
@@ -313,7 +313,7 @@ describe("gateway integration", () => {
 
   it("propagates validation errors when saving", async () => {
     const gateway = new InMemoryRoundGateway();
-    const round = await gateway.startNewRound(["alice", "bob"], "alice", 1);
+    const round = await gateway.startNewRound("game-1", ["alice", "bob"], "alice", 1);
 
     vi.spyOn(RoundRules, "assertValidRoundState").mockImplementation(() => {
       throw new InvalidRoundStateError("boom", round);

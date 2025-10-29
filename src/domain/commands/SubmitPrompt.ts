@@ -15,8 +15,8 @@ export class SubmitPrompt extends Command {
   }
 
   async execute(ctx: CommandContext): Promise<void> {
-    const { gateway, bus, imageGenerator, logger, config } = ctx;
-    const state = await gateway.loadRoundState(this.roundId);
+    const { roundGateway, bus, imageGenerator, logger, gameGateway } = ctx;
+    const state = await roundGateway.loadRoundState(this.roundId);
 
     if (state.phase !== "prompt") {
       throw new Error("Cannot submit prompt when round is not in prompt phase");
@@ -26,7 +26,7 @@ export class SubmitPrompt extends Command {
       throw new Error("Only the active player can submit the real prompt");
     }
 
-    const { inserted, prompts } = await gateway.appendPrompt(
+    const { inserted, prompts } = await roundGateway.appendPrompt(
       this.roundId,
       this.playerId,
       this.prompt,
@@ -50,11 +50,13 @@ export class SubmitPrompt extends Command {
 
     state.prompts = prompts;
 
+    const game = await gameGateway.loadGameState(state.gameId);
+
     await bus.publish(`round:${state.id}`, {
       type: "ImageGenerated",
       roundId: state.id,
       imageUrl,
-      guessingDurationMs: config.guessingDurationMs,
+      guessingDurationMs: game.config.guessingDurationMs,
     });
 
     logger?.info?.("Prompt submitted", {
@@ -63,6 +65,6 @@ export class SubmitPrompt extends Command {
       at: this.at,
     });
 
-    await transitionToGuessing(state, this.at, imageUrl, ctx);
+    await transitionToGuessing(state, this.at, imageUrl, ctx, game.config);
   }
 }

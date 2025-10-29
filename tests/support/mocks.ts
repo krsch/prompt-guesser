@@ -1,7 +1,8 @@
 import { vi, type Mock } from "vitest";
 
 import type { CommandContext } from "../../src/domain/commands/Command.js";
-import { GameConfig } from "../../src/domain/GameConfig.js";
+import { createGameConfig, type GameConfig } from "../../src/domain/GameConfig.js";
+import type { GameGateway } from "../../src/domain/ports/GameGateway.js";
 import type { ImageGenerator } from "../../src/domain/ports/ImageGenerator.js";
 import type { MessageBus } from "../../src/domain/ports/MessageBus.js";
 import type { RoundGateway } from "../../src/domain/ports/RoundGateway.js";
@@ -22,6 +23,12 @@ export interface RoundGatewayMock extends RoundGateway {
   readonly appendVote: Fn<RoundGateway["appendVote"]>;
   readonly countSubmittedPrompts: Fn<RoundGateway["countSubmittedPrompts"]>;
   readonly startNewRound: Fn<RoundGateway["startNewRound"]>;
+}
+
+export interface GameGatewayMock extends GameGateway {
+  readonly loadGameState: Fn<GameGateway["loadGameState"]>;
+  readonly saveGameState: Fn<GameGateway["saveGameState"]>;
+  readonly createGame: Fn<GameGateway["createGame"]>;
 }
 
 export interface MessageBusMock extends MessageBus {
@@ -47,6 +54,14 @@ export function createRoundGatewayMock(): RoundGatewayMock {
   };
 }
 
+export function createGameGatewayMock(): GameGatewayMock {
+  return {
+    loadGameState: createMock<GameGateway["loadGameState"]>(),
+    saveGameState: createMock<GameGateway["saveGameState"]>(),
+    createGame: createMock<GameGateway["createGame"]>(),
+  };
+}
+
 export function createMessageBusMock(): MessageBusMock {
   return {
     publish: createMock<MessageBus["publish"]>(),
@@ -66,7 +81,8 @@ export function createImageGeneratorMock(): ImageGeneratorMock {
 }
 
 export interface CommandContextOverrides {
-  readonly gateway?: RoundGatewayMock;
+  readonly roundGateway?: RoundGatewayMock;
+  readonly gameGateway?: GameGatewayMock;
   readonly bus?: MessageBusMock;
   readonly imageGenerator?: ImageGeneratorMock;
   readonly scheduler?: SchedulerMock;
@@ -75,7 +91,8 @@ export interface CommandContextOverrides {
 }
 
 export interface CommandContextMock extends CommandContext {
-  readonly gateway: RoundGatewayMock;
+  readonly roundGateway: RoundGatewayMock;
+  readonly gameGateway: GameGatewayMock;
   readonly bus: MessageBusMock;
   readonly imageGenerator: ImageGeneratorMock;
   readonly scheduler: SchedulerMock;
@@ -85,12 +102,15 @@ export interface CommandContextMock extends CommandContext {
 export function createCommandContext(
   overrides: CommandContextOverrides = {},
 ): CommandContextMock {
+  const config = overrides.config ?? createGameConfig();
+
   const context = {
-    gateway: overrides.gateway ?? createRoundGatewayMock(),
+    roundGateway: overrides.roundGateway ?? createRoundGatewayMock(),
+    gameGateway: overrides.gameGateway ?? createGameGatewayMock(),
     bus: overrides.bus ?? createMessageBusMock(),
     imageGenerator: overrides.imageGenerator ?? createImageGeneratorMock(),
     scheduler: overrides.scheduler ?? createSchedulerMock(),
-    config: overrides.config ?? GameConfig.withDefaults(),
+    config,
     ...(overrides.logger !== undefined ? { logger: overrides.logger } : {}),
   } satisfies CommandContextMock;
 

@@ -1,8 +1,12 @@
 import { webcrypto } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
+import { InMemoryGameGateway } from "../src/adapters/in-memory/InMemoryGameGateway.js";
 import { InMemoryRoundGateway } from "../src/adapters/in-memory/InMemoryRoundGateway.js";
-import { StartNewRound } from "../src/domain/commands/StartNewRound.js";
+import type { CommandContext } from "../src/domain/commands/Command.js";
+import { CreateGame } from "../src/domain/commands/CreateGame.js";
+import { JoinGame } from "../src/domain/commands/JoinGame.js";
+import { StartNextRound } from "../src/domain/commands/StartNextRound.js";
 import { SubmitDecoy } from "../src/domain/commands/SubmitDecoy.js";
 import { SubmitPrompt } from "../src/domain/commands/SubmitPrompt.js";
 import { SubmitVote } from "../src/domain/commands/SubmitVote.js";
@@ -10,7 +14,7 @@ import {
   getShuffledPrompts,
   promptIndexToPlayerId,
 } from "../src/domain/entities/RoundRules.js";
-import { GameConfig } from "../src/domain/GameConfig.js";
+import { createGameConfig } from "../src/domain/GameConfig.js";
 import type { ImageGenerator } from "../src/domain/ports/ImageGenerator.js";
 import type { MessageBus } from "../src/domain/ports/MessageBus.js";
 import type { Scheduler } from "../src/domain/ports/Scheduler.js";
@@ -35,7 +39,8 @@ describe("Integration: play a full round", () => {
         return array;
       });
 
-    const gateway = new InMemoryRoundGateway();
+    const roundGateway = new InMemoryRoundGateway();
+    const gameGateway = new InMemoryGameGateway();
     interface PublishedEvent extends Record<string, unknown> {
       readonly type: string;
     }
@@ -64,17 +69,33 @@ describe("Integration: play a full round", () => {
       },
     };
 
-    const config = GameConfig.withDefaults();
+    const config = createGameConfig({ totalRounds: 1 });
 
     const startedAt = Date.UTC(2024, 4, 20, 12, 0, 0);
 
-    await new StartNewRound(players, activePlayer, startedAt).execute({
-      gateway,
+    const baseContext = {
+      roundGateway,
+      gameGateway,
       bus,
       imageGenerator,
-      config,
       scheduler,
-    });
+    } satisfies CommandContext;
+
+    await new CreateGame(activePlayer, config, startedAt).execute(baseContext);
+
+    const createdEvent = events.find((entry) => entry.event.type === "GameCreated");
+    const gameIdValue = createdEvent?.event["gameId"];
+    if (typeof gameIdValue !== "string") {
+      throw new Error("Game identifier should be a string");
+    }
+
+    const gameId = gameIdValue;
+
+    for (const player of players.slice(1)) {
+      await new JoinGame(gameId, player, startedAt + 1_000).execute(baseContext);
+    }
+
+    await new StartNextRound(gameId, startedAt).execute(baseContext);
 
     const roundStarted = events.find((entry) => entry.event.type === "RoundStarted");
     expect(roundStarted).toBeDefined();
@@ -91,13 +112,7 @@ describe("Integration: play a full round", () => {
       activePlayer,
       "A cat playing piano",
       promptTime,
-    ).execute({
-      gateway,
-      bus,
-      imageGenerator,
-      config,
-      scheduler,
-    });
+    ).execute(baseContext);
 
     const guessingEvents = events.filter((entry) => entry.event.type === "PhaseChanged");
     expect(guessingEvents.some((entry) => entry.event["phase"] === "guessing")).toBe(
@@ -109,39 +124,21 @@ describe("Integration: play a full round", () => {
       players[1],
       "A dog painting",
       promptTime + 1_000,
-    ).execute({
-      gateway,
-      bus,
-      imageGenerator,
-      config,
-      scheduler,
-    });
+    ).execute(baseContext);
     await new SubmitDecoy(
       roundId,
       players[2],
       "A rabbit skiing",
       promptTime + 2_000,
-    ).execute({
-      gateway,
-      bus,
-      imageGenerator,
-      config,
-      scheduler,
-    });
+    ).execute(baseContext);
     await new SubmitDecoy(
       roundId,
       players[3],
       "A turtle surfing",
       promptTime + 3_000,
-    ).execute({
-      gateway,
-      bus,
-      imageGenerator,
-      config,
-      scheduler,
-    });
+    ).execute(baseContext);
 
-    const roundStateAfterPrompts = await gateway.loadRoundState(roundId);
+    const roundStateAfterPrompts = await roundGateway.loadRoundState(roundId);
     expect(roundStateAfterPrompts.phase).toBe("voting");
     const promptsAfterShuffle = getShuffledPrompts(roundStateAfterPrompts);
     expect(new Set(promptsAfterShuffle)).toEqual(
@@ -173,39 +170,21 @@ describe("Integration: play a full round", () => {
       players[1],
       voteIndexForPrompt("A cat playing piano"),
       promptTime + 5_000,
-    ).execute({
-      gateway,
-      bus,
-      imageGenerator,
-      config,
-      scheduler,
-    });
+    ).execute(baseContext);
     await new SubmitVote(
       roundId,
       players[2],
       voteIndexForPrompt("A turtle surfing"),
       promptTime + 6_000,
-    ).execute({
-      gateway,
-      bus,
-      imageGenerator,
-      config,
-      scheduler,
-    });
+    ).execute(baseContext);
     await new SubmitVote(
       roundId,
       players[3],
       voteIndexForPrompt("A dog painting"),
       promptTime + 7_000,
-    ).execute({
-      gateway,
-      bus,
-      imageGenerator,
-      config,
-      scheduler,
-    });
+    ).execute(baseContext);
 
-    const finalState = await gateway.loadRoundState(roundId);
+    const finalState = await roundGateway.loadRoundState(roundId);
     expect(finalState.phase).toBe("finished");
 
     expect(finalState.scores).toEqual({
@@ -220,7 +199,7 @@ describe("Integration: play a full round", () => {
       .filter((entry) => entry.event.type === "PhaseChanged")
       .map((entry) => entry.event["phase"]);
 
-    expect(phases).toEqual(["guessing", "voting", "scoring"]);
+    expect(phases).toEqual(["guessing", "voting", "scoring", "finished"]);
 
     expect(
       events.some(
@@ -228,6 +207,15 @@ describe("Integration: play a full round", () => {
           entry.event.type === "RoundFinished" && entry.event["roundId"] === roundId,
       ),
     ).toBe(true);
+    const finalGameState = await gameGateway.loadGameState(gameId);
+    expect(finalGameState.phase).toBe("finished");
+    expect(finalGameState.cumulativeScores).toEqual({
+      alex: 3,
+      bailey: 4,
+      casey: 0,
+      devon: 1,
+    });
+
     seedSpy.mockRestore();
   });
 });

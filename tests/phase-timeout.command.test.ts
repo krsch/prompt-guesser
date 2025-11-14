@@ -6,6 +6,7 @@ import {
   assertValidRoundState,
   getShuffledPrompts,
 } from "../src/domain/entities/RoundRules.js";
+import { createGameConfig } from "../src/domain/GameConfig.js";
 import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 
 type RoundOverrides = Partial<Omit<RoundState, "prompts" | "votes">> & {
@@ -15,6 +16,7 @@ type RoundOverrides = Partial<Omit<RoundState, "prompts" | "votes">> & {
 
 const roundBase = (overrides: RoundOverrides = {}): RoundState => ({
   id: "round-7",
+  gameId: "game-1",
   players: ["a", "b", "c", "d"] as const satisfies readonly string[],
   activePlayer: "a",
   phase: "guessing",
@@ -29,19 +31,29 @@ const roundBase = (overrides: RoundOverrides = {}): RoundState => ({
 describe("PhaseTimeout command", () => {
   it("advances from guessing to voting when the deadline passes", async () => {
     const context = createCommandContext();
-    const { gateway, bus, config, scheduler } = context;
+    const { roundGateway, gameGateway, bus, config, scheduler } = context;
     const now = Date.now();
     const round = roundBase({
       prompts: { a: "real", b: "decoy" },
     });
 
-    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    roundGateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config,
+      phase: "active",
+    });
 
     const command = new PhaseTimeout(round.id, "guessing", now);
     await command.execute(context);
 
-    expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
-    const [savedState] = gateway.saveRoundState.mock.calls[0] ?? [];
+    expect(roundGateway.saveRoundState).toHaveBeenCalledTimes(1);
+    const [savedState] = roundGateway.saveRoundState.mock.calls[0] ?? [];
     if (!savedState) {
       throw new Error("Expected round state to be saved");
     }
@@ -82,27 +94,42 @@ describe("PhaseTimeout command", () => {
 
   it("finishes the round when the prompt deadline passes without a submission", async () => {
     const context = createCommandContext();
-    const { gateway, bus, config, scheduler } = context;
+    const { roundGateway, gameGateway, bus, config, scheduler } = context;
     const now = Date.now();
     const round = roundBase({
       phase: "prompt",
       prompts: {},
     });
 
-    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    roundGateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config: { ...config, totalRounds: 1 },
+      phase: "active",
+    });
 
     const command = new PhaseTimeout(round.id, "prompt", now);
     await command.execute(context);
 
-    expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
-    expect(gateway.saveRoundState).toHaveBeenCalledWith(
+    expect(roundGateway.saveRoundState).toHaveBeenCalledTimes(1);
+    expect(roundGateway.saveRoundState).toHaveBeenCalledWith(
       expect.objectContaining({
         phase: "finished",
         finishedAt: now,
         scores: { a: 0, b: 0, c: 0, d: 0 },
       }),
     );
-    expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
+    expect(bus.publish).toHaveBeenNthCalledWith(1, `round:${round.id}`, {
+      type: "PhaseChanged",
+      phase: "finished",
+      at: now,
+    });
+    expect(bus.publish).toHaveBeenNthCalledWith(2, `round:${round.id}`, {
       type: "RoundFinished",
       roundId: round.id,
       at: now,
@@ -113,7 +140,7 @@ describe("PhaseTimeout command", () => {
 
   it("finalizes the round when the voting deadline expires", async () => {
     const context = createCommandContext();
-    const { gateway, bus, config, scheduler } = context;
+    const { roundGateway, gameGateway, bus, config, scheduler } = context;
     const now = Date.now();
     const round = roundBase({
       phase: "voting",
@@ -122,18 +149,33 @@ describe("PhaseTimeout command", () => {
       votes: { b: 1 },
     });
 
-    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    roundGateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config: { ...config, totalRounds: 1 },
+      phase: "active",
+    });
 
     const command = new PhaseTimeout(round.id, "voting", now);
     await command.execute(context);
 
-    expect(gateway.saveRoundState).toHaveBeenCalledTimes(2);
-    expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
+    expect(roundGateway.saveRoundState).toHaveBeenCalledTimes(2);
+    expect(bus.publish).toHaveBeenNthCalledWith(1, `round:${round.id}`, {
       type: "PhaseChanged",
       phase: "scoring",
       at: now,
     });
-    expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
+    expect(bus.publish).toHaveBeenNthCalledWith(2, `round:${round.id}`, {
+      type: "PhaseChanged",
+      phase: "finished",
+      at: now,
+    });
+    expect(bus.publish).toHaveBeenNthCalledWith(3, `round:${round.id}`, {
       type: "RoundFinished",
       roundId: round.id,
       at: now,
@@ -144,16 +186,26 @@ describe("PhaseTimeout command", () => {
 
   it("does nothing when the stored phase does not match", async () => {
     const context = createCommandContext();
-    const { gateway, bus, config, scheduler } = context;
+    const { roundGateway, gameGateway, bus, config, scheduler } = context;
     const now = Date.now();
     const round = roundBase({ phase: "voting" });
 
-    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    roundGateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config: createGameConfig(),
+      phase: "active",
+    });
 
     const command = new PhaseTimeout(round.id, "guessing", now);
     await command.execute(context);
 
-    expect(gateway.saveRoundState).not.toHaveBeenCalled();
+    expect(roundGateway.saveRoundState).not.toHaveBeenCalled();
     expect(bus.publish).not.toHaveBeenCalled();
     expect(scheduler.scheduleTimeout).not.toHaveBeenCalled();
   });

@@ -21,6 +21,7 @@ type RoundOverrides = Partial<Omit<RoundState, "prompts" | "votes" | "scores">> 
 function makeState(overrides: RoundOverrides = {}): RoundState {
   return {
     id: "round-1",
+    gameId: "game-1",
     players: ["alice", "bob"] as const satisfies readonly string[],
     activePlayer: "alice",
     phase: "prompt",
@@ -300,7 +301,7 @@ describe("gateway integration", () => {
 
   it("propagates validation errors when loading", async () => {
     const gateway = new InMemoryRoundGateway();
-    const round = await gateway.startNewRound(["alice", "bob"], "alice", 1);
+    const round = await gateway.startNewRound("game-1", ["alice", "bob"], "alice", 1);
 
     vi.spyOn(RoundRules, "assertValidRoundState").mockImplementation(() => {
       throw new InvalidRoundStateError("boom", round);
@@ -313,7 +314,7 @@ describe("gateway integration", () => {
 
   it("propagates validation errors when saving", async () => {
     const gateway = new InMemoryRoundGateway();
-    const round = await gateway.startNewRound(["alice", "bob"], "alice", 1);
+    const round = await gateway.startNewRound("game-1", ["alice", "bob"], "alice", 1);
 
     vi.spyOn(RoundRules, "assertValidRoundState").mockImplementation(() => {
       throw new InvalidRoundStateError("boom", round);

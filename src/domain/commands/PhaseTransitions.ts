@@ -1,23 +1,25 @@
 import { generateShuffle, getShuffledPrompts } from "../entities/RoundRules.js";
+import type { GameConfig } from "../GameConfig.js";
 import type { RoundState, ValidRoundState } from "../ports/RoundGateway.js";
 import type { PlayerId, TimePoint } from "../typedefs.js";
 import type { CommandContext } from "./Command.js";
 
 type PhaseTransitionContext = Pick<
   CommandContext,
-  "gateway" | "bus" | "logger" | "config" | "scheduler"
+  "roundGateway" | "bus" | "logger" | "scheduler"
 >;
 
 export async function transitionToGuessing(
   state: RoundState,
   at: TimePoint,
   imageUrl: string,
-  { gateway, bus, logger, scheduler, config }: PhaseTransitionContext,
+  { roundGateway, bus, logger, scheduler }: PhaseTransitionContext,
+  config: GameConfig,
 ): Promise<void> {
   state.phase = "guessing";
   state.imageUrl = imageUrl;
 
-  await gateway.saveRoundState(state);
+  await roundGateway.saveRoundState(state);
 
   await scheduler.scheduleTimeout(state.id, "guessing", config.guessingDurationMs);
 
@@ -38,14 +40,15 @@ export async function transitionToVoting(
   state: ValidRoundState,
   prompts: Record<PlayerId, string>,
   at: TimePoint,
-  { gateway, bus, logger, config, scheduler }: PhaseTransitionContext,
+  { roundGateway, bus, logger, scheduler }: PhaseTransitionContext,
+  config: GameConfig,
 ): Promise<void> {
   state.prompts = { ...prompts };
   state.shuffleOrder = generateShuffle(state);
   state.phase = "voting";
   state.votes = {};
 
-  await gateway.saveRoundState(state);
+  await roundGateway.saveRoundState(state);
 
   const shuffledPrompts = getShuffledPrompts(state);
 

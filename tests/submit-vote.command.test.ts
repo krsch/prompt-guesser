@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createCommandContext } from "./support/mocks.js";
 import { SubmitVote } from "../src/domain/commands/SubmitVote.js";
+import { createGameConfig } from "../src/domain/GameConfig.js";
 import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 import type { PlayerId } from "../src/domain/typedefs.js";
 
@@ -19,6 +20,7 @@ type RoundOverrides = Partial<Omit<RoundState, "prompts" | "votes">> & {
 
 const baseRound = (overrides: RoundOverrides = {}): RoundState => ({
   id: "round-123",
+  gameId: "game-1",
   players: [...PLAYERS],
   activePlayer: PLAYERS[0],
   phase: "voting",
@@ -39,7 +41,7 @@ const baseRound = (overrides: RoundOverrides = {}): RoundState => ({
 describe("SubmitVote command", () => {
   it("records a vote and finalizes the round once all votes are in", async () => {
     const context = createCommandContext();
-    const { gateway, bus, config } = context;
+    const { roundGateway, gameGateway, bus, config } = context;
     const now = Date.now();
     const round = baseRound({
       votes: {
@@ -48,8 +50,8 @@ describe("SubmitVote command", () => {
       },
     });
 
-    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
-    gateway.appendVote.mockResolvedValue({
+    roundGateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    roundGateway.appendVote.mockResolvedValue({
       inserted: true,
       votes: {
         [PLAYERS[1]]: 1,
@@ -57,19 +59,34 @@ describe("SubmitVote command", () => {
         [PLAYERS[3]]: 0,
       } as Record<string, number>,
     });
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config: { ...config, totalRounds: 1 },
+      phase: "active",
+    });
 
     const command = new SubmitVote(round.id, PLAYERS[3], 0, now);
     await command.execute(context);
 
-    expect(gateway.appendVote).toHaveBeenCalledWith(round.id, PLAYERS[3], 0);
-    expect(gateway.saveRoundState).toHaveBeenCalledTimes(2);
+    expect(roundGateway.appendVote).toHaveBeenCalledWith(round.id, PLAYERS[3], 0);
+    expect(roundGateway.saveRoundState).toHaveBeenCalledTimes(2);
 
-    expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
+    expect(bus.publish).toHaveBeenNthCalledWith(1, `round:${round.id}`, {
       type: "PhaseChanged",
       phase: "scoring",
       at: now,
     });
-    expect(bus.publish).toHaveBeenCalledWith(`round:${round.id}`, {
+    expect(bus.publish).toHaveBeenNthCalledWith(2, `round:${round.id}`, {
+      type: "PhaseChanged",
+      phase: "finished",
+      at: now,
+    });
+    expect(bus.publish).toHaveBeenNthCalledWith(3, `round:${round.id}`, {
       type: "RoundFinished",
       roundId: round.id,
       at: now,
@@ -84,54 +101,84 @@ describe("SubmitVote command", () => {
 
   it("does not finalize when votes are still missing", async () => {
     const context = createCommandContext();
-    const { gateway, bus, config } = context;
+    const { roundGateway, gameGateway, bus, config } = context;
     const now = Date.now();
     const round = baseRound();
 
-    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
-    gateway.appendVote.mockResolvedValue({
+    roundGateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    roundGateway.appendVote.mockResolvedValue({
       inserted: true,
       votes: {
         [PLAYERS[1]]: 1,
       } as Record<string, number>,
     });
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config: createGameConfig(),
+      phase: "active",
+    });
 
     const command = new SubmitVote(round.id, PLAYERS[1], 1, now);
     await command.execute(context);
 
-    expect(gateway.saveRoundState).not.toHaveBeenCalled();
+    expect(roundGateway.saveRoundState).not.toHaveBeenCalled();
     expect(bus.publish).not.toHaveBeenCalled();
   });
 
   it("is idempotent when the player repeats the same vote", async () => {
     const context = createCommandContext();
-    const { gateway, bus, config } = context;
+    const { roundGateway, gameGateway, bus, config } = context;
     const now = Date.now();
     const round = baseRound({
       votes: { [PLAYERS[1]]: 2 },
     });
 
-    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    roundGateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
 
-    gateway.appendVote.mockResolvedValue({
+    roundGateway.appendVote.mockResolvedValue({
       inserted: false,
       votes: { [PLAYERS[1]]: 2 } as Record<string, number>,
+    });
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config: createGameConfig(),
+      phase: "active",
     });
 
     const command = new SubmitVote(round.id, PLAYERS[1], 2, now);
     await command.execute(context);
 
-    expect(gateway.appendVote).toHaveBeenCalledWith(round.id, PLAYERS[1], 2);
-    expect(gateway.saveRoundState).not.toHaveBeenCalled();
+    expect(roundGateway.appendVote).toHaveBeenCalledWith(round.id, PLAYERS[1], 2);
+    expect(roundGateway.saveRoundState).not.toHaveBeenCalled();
     expect(bus.publish).not.toHaveBeenCalled();
   });
 
   it("throws when executed outside of the voting phase", async () => {
     const context = createCommandContext();
-    const { gateway, config } = context;
+    const { roundGateway, gameGateway } = context;
     const round = baseRound({ phase: "guessing" });
 
-    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    roundGateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config: createGameConfig(),
+      phase: "active",
+    });
 
     const command = new SubmitVote(round.id, PLAYERS[1], 0, Date.now());
 
@@ -140,10 +187,20 @@ describe("SubmitVote command", () => {
 
   it("throws when the vote index is out of bounds", async () => {
     const context = createCommandContext();
-    const { gateway, config } = context;
+    const { roundGateway, gameGateway } = context;
     const round = baseRound();
 
-    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    roundGateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config: createGameConfig(),
+      phase: "active",
+    });
 
     const command = new SubmitVote(round.id, PLAYERS[1], 99, Date.now());
 
@@ -152,10 +209,20 @@ describe("SubmitVote command", () => {
 
   it("rejects votes from the active player", async () => {
     const context = createCommandContext();
-    const { gateway, config } = context;
+    const { roundGateway, gameGateway } = context;
     const round = baseRound();
 
-    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    roundGateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config: createGameConfig(),
+      phase: "active",
+    });
 
     const command = new SubmitVote(round.id, PLAYERS[0], 0, Date.now());
 
@@ -164,10 +231,20 @@ describe("SubmitVote command", () => {
 
   it("rejects votes from players outside the round", async () => {
     const context = createCommandContext();
-    const { gateway, config } = context;
+    const { roundGateway, gameGateway } = context;
     const round = baseRound();
 
-    gateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    roundGateway.loadRoundState.mockResolvedValue(round as ValidRoundState);
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config: createGameConfig(),
+      phase: "active",
+    });
 
     const command = new SubmitVote(round.id, "stranger" as PlayerId, 0, Date.now());
 

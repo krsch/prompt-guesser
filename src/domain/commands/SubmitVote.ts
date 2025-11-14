@@ -14,8 +14,9 @@ export class SubmitVote extends Command {
     super();
   }
 
-  async execute({ gateway, bus, logger }: CommandContext): Promise<void> {
-    const state = await gateway.loadRoundState(this.roundId);
+  async execute(ctx: CommandContext): Promise<void> {
+    const { roundGateway, logger } = ctx;
+    const state = await roundGateway.loadRoundState(this.roundId);
 
     if (state.phase !== "voting") {
       throw new Error("Cannot submit vote when round is not in voting phase");
@@ -33,7 +34,7 @@ export class SubmitVote extends Command {
       throw new Error("Invalid vote index");
     }
 
-    const { inserted, votes } = await gateway.appendVote(
+    const { inserted, votes } = await roundGateway.appendVote(
       this.roundId,
       this.playerId,
       this.promptIndex,
@@ -56,6 +57,6 @@ export class SubmitVote extends Command {
 
     state.votes = votes;
 
-    await finalizeRound(state, this.at, gateway, bus, logger, this.type);
+    await finalizeRound(state, this.at, ctx, this.type);
   }
 }

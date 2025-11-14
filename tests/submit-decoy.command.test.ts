@@ -18,10 +18,11 @@ const PLAYERS = [
 describe("SubmitDecoy command", () => {
   it("stores a decoy and transitions to voting when all prompts are submitted", async () => {
     const context = createCommandContext();
-    const { gateway, bus, config, scheduler } = context;
+    const { roundGateway, gameGateway, bus, config, scheduler } = context;
     const now = Date.now();
     const round: ValidRoundState = {
       id: "round-123",
+      gameId: "game-1",
       players: [...PLAYERS],
       activePlayer: PLAYERS[0],
       phase: "guessing",
@@ -35,8 +36,8 @@ describe("SubmitDecoy command", () => {
       imageUrl: "https://example.com/image.png",
     };
 
-    gateway.loadRoundState.mockResolvedValue(round);
-    gateway.appendPrompt.mockResolvedValue({
+    roundGateway.loadRoundState.mockResolvedValue(round);
+    roundGateway.appendPrompt.mockResolvedValue({
       inserted: true,
       prompts: {
         [PLAYERS[0]]: "real prompt",
@@ -45,13 +46,27 @@ describe("SubmitDecoy command", () => {
         [PLAYERS[3]]: "orange decoy",
       },
     });
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config,
+      phase: "active",
+    });
 
     const command = new SubmitDecoy(round.id, PLAYERS[1], "blue decoy", now);
     await command.execute(context);
 
-    expect(gateway.appendPrompt).toHaveBeenCalledWith(round.id, PLAYERS[1], "blue decoy");
-    expect(gateway.saveRoundState).toHaveBeenCalledTimes(1);
-    const [savedState] = gateway.saveRoundState.mock.calls[0] ?? [];
+    expect(roundGateway.appendPrompt).toHaveBeenCalledWith(
+      round.id,
+      PLAYERS[1],
+      "blue decoy",
+    );
+    expect(roundGateway.saveRoundState).toHaveBeenCalledTimes(1);
+    const [savedState] = roundGateway.saveRoundState.mock.calls[0] ?? [];
     if (!savedState) {
       throw new Error("Expected round state to be saved");
     }
@@ -89,10 +104,11 @@ describe("SubmitDecoy command", () => {
 
   it("does not transition when not all prompts have been submitted", async () => {
     const context = createCommandContext();
-    const { gateway, bus, config, scheduler } = context;
+    const { roundGateway, gameGateway, bus, config, scheduler } = context;
     const now = Date.now();
     const round: ValidRoundState = {
       id: "round-123",
+      gameId: "game-1",
       players: [...PLAYERS],
       activePlayer: PLAYERS[0],
       phase: "guessing",
@@ -104,29 +120,40 @@ describe("SubmitDecoy command", () => {
       imageUrl: "https://example.com/image.png",
     };
 
-    gateway.loadRoundState.mockResolvedValue(round);
-    gateway.appendPrompt.mockResolvedValue({
+    roundGateway.loadRoundState.mockResolvedValue(round);
+    roundGateway.appendPrompt.mockResolvedValue({
       inserted: true,
       prompts: {
         [PLAYERS[0]]: "real prompt",
         [PLAYERS[1]]: "blue decoy",
       },
     });
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config,
+      phase: "active",
+    });
 
     const command = new SubmitDecoy(round.id, PLAYERS[1], "blue decoy", now);
     await command.execute(context);
 
-    expect(gateway.saveRoundState).not.toHaveBeenCalled();
+    expect(roundGateway.saveRoundState).not.toHaveBeenCalled();
     expect(bus.publish).not.toHaveBeenCalled();
     expect(scheduler.scheduleTimeout).not.toHaveBeenCalled();
   });
 
   it("is idempotent when the decoy already exists", async () => {
     const context = createCommandContext();
-    const { gateway, bus, config, scheduler } = context;
+    const { roundGateway, gameGateway, bus, config, scheduler } = context;
     const now = Date.now();
     const round: ValidRoundState = {
       id: "round-123",
+      gameId: "game-1",
       players: [...PLAYERS],
       activePlayer: PLAYERS[0],
       phase: "guessing",
@@ -139,29 +166,40 @@ describe("SubmitDecoy command", () => {
       imageUrl: "https://example.com/image.png",
     };
 
-    gateway.loadRoundState.mockResolvedValue(round);
-    gateway.appendPrompt.mockResolvedValue({
+    roundGateway.loadRoundState.mockResolvedValue(round);
+    roundGateway.appendPrompt.mockResolvedValue({
       inserted: false,
       prompts: {
         [PLAYERS[0]]: "real prompt",
         [PLAYERS[1]]: "blue decoy",
       },
     });
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config,
+      phase: "active",
+    });
 
     const command = new SubmitDecoy(round.id, PLAYERS[1], "blue decoy", now);
     await command.execute(context);
 
-    expect(gateway.saveRoundState).not.toHaveBeenCalled();
+    expect(roundGateway.saveRoundState).not.toHaveBeenCalled();
     expect(bus.publish).not.toHaveBeenCalled();
     expect(scheduler.scheduleTimeout).not.toHaveBeenCalled();
   });
 
   it("throws when executed outside of the guessing phase", async () => {
     const context = createCommandContext();
-    const { gateway, config, scheduler } = context;
+    const { roundGateway, gameGateway, config } = context;
     const now = Date.now();
     const round: ValidRoundState = {
       id: "round-123",
+      gameId: "game-1",
       players: [...PLAYERS],
       activePlayer: PLAYERS[0],
       phase: "prompt",
@@ -170,7 +208,17 @@ describe("SubmitDecoy command", () => {
       prompts: {},
     };
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    roundGateway.loadRoundState.mockResolvedValue(round);
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config,
+      phase: "active",
+    });
 
     const command = new SubmitDecoy(round.id, PLAYERS[1], "blue decoy", now);
 
@@ -179,10 +227,11 @@ describe("SubmitDecoy command", () => {
 
   it("throws when the active player tries to submit a decoy", async () => {
     const context = createCommandContext();
-    const { gateway, config, scheduler } = context;
+    const { roundGateway, gameGateway, config } = context;
     const now = Date.now();
     const round: ValidRoundState = {
       id: "round-123",
+      gameId: "game-1",
       players: [...PLAYERS],
       activePlayer: PLAYERS[0],
       phase: "guessing",
@@ -192,7 +241,17 @@ describe("SubmitDecoy command", () => {
       seed: 42,
     };
 
-    gateway.loadRoundState.mockResolvedValue(round);
+    roundGateway.loadRoundState.mockResolvedValue(round);
+    gameGateway.loadGameState.mockResolvedValue({
+      id: round.gameId,
+      players: [...round.players],
+      host: round.activePlayer,
+      activeRoundId: round.id,
+      currentRoundIndex: 0,
+      cumulativeScores: {},
+      config,
+      phase: "active",
+    });
 
     const command = new SubmitDecoy(round.id, PLAYERS[0], "oops", now);
 

@@ -49,24 +49,33 @@ export async function finalizeRound(
     scores[state.activePlayer]! += 3;
   }
 
-  const newstate = { ...state, scores, phase: "scoring" } as ValidRoundState;
+  const scoringState: ValidRoundState = {
+    ...state,
+    votes: state.votes ?? {},
+    scores,
+    phase: "scoring",
+  };
 
-  await roundGateway.saveRoundState(newstate);
+  await roundGateway.saveRoundState(scoringState);
   logger?.info?.("Round entering scoring", {
     roundId: state.id,
     at,
     type: source,
-    phase: newstate.phase,
+    phase: scoringState.phase,
   });
 
   await bus.publish(`round:${state.id}`, {
     type: "PhaseChanged",
-    phase: newstate.phase,
+    phase: scoringState.phase,
     at,
   });
 
-  const finstate = { ...newstate, phase: "finished", finishedAt: at } as ValidRoundState;
-  await roundGateway.saveRoundState(finstate);
+  const finishedState: ValidRoundState = {
+    ...scoringState,
+    phase: "finished",
+    finishedAt: at,
+  };
+  await roundGateway.saveRoundState(finishedState);
 
   logger?.info?.("Round finished", {
     roundId: state.id,
@@ -88,7 +97,7 @@ export async function finalizeRound(
   });
 
   const game = await gameGateway.loadGameState(state.gameId);
-  await updateGameAfterRound(game, finstate.id, scores, at, ctx, source);
+  await updateGameAfterRound(game, finishedState.id, scores, at, ctx, source);
 }
 
 export async function updateGameAfterRound(
@@ -113,9 +122,8 @@ export async function updateGameAfterRound(
   const nextPhase = roundsRemaining ? game.phase : "finished";
 
   const nextGame: GameState = {
-    ...game,
+    ...withoutActiveRoundId(game),
     cumulativeScores,
-    activeRoundId: undefined,
     currentRoundIndex: nextRoundIndex,
     phase: nextPhase,
   };
@@ -134,4 +142,10 @@ export async function updateGameAfterRound(
     const command = new StartNextRound(nextGame.id, at);
     await dispatchCommand(command, ctx);
   }
+}
+
+function withoutActiveRoundId(game: GameState): Omit<GameState, "activeRoundId"> {
+  const { activeRoundId: removedActiveRoundId, ...rest } = game;
+  void removedActiveRoundId;
+  return rest;
 }

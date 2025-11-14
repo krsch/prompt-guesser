@@ -88,7 +88,7 @@ export async function finalizeRound(
   });
 
   const game = await gameGateway.loadGameState(state.gameId);
-  await updateGameAfterRound(game, finstate.id, scores, at, ctx);
+  await updateGameAfterRound(game, finstate.id, scores, at, ctx, source);
 }
 
 export async function updateGameAfterRound(
@@ -97,35 +97,41 @@ export async function updateGameAfterRound(
   scores: Record<PlayerId, number>,
   at: TimePoint,
   ctx: CommandContext,
+  source: string = "FinalizeRound",
 ): Promise<void> {
   const { gameGateway, logger } = ctx;
 
+  const cumulativeScores = { ...game.cumulativeScores };
+
   for (const [playerId, score] of Object.entries(scores)) {
-    game.cumulativeScores[playerId] =
-      (game.cumulativeScores[playerId] ?? 0) + score;
+    cumulativeScores[playerId] = (cumulativeScores[playerId] ?? 0) + score;
   }
 
-  delete game.activeRoundId;
-  game.currentRoundIndex += 1;
+  const nextRoundIndex = game.currentRoundIndex + 1;
+  const roundsRemaining = nextRoundIndex < game.config.totalRounds;
 
-  const roundsRemaining = game.currentRoundIndex < game.config.totalRounds;
+  const nextPhase = roundsRemaining ? game.phase : "finished";
 
-  if (!roundsRemaining) {
-    game.phase = "finished";
-  }
+  const nextGame: GameState = {
+    ...game,
+    cumulativeScores,
+    activeRoundId: undefined,
+    currentRoundIndex: nextRoundIndex,
+    phase: nextPhase,
+  };
 
-  await gameGateway.saveGameState(game);
+  await gameGateway.saveGameState(nextGame);
 
   logger?.info?.("Game state updated after round", {
-    type: "FinalizeRound",
-    gameId: game.id,
+    type: source,
+    gameId: nextGame.id,
     roundId,
     at,
-    phase: game.phase,
+    phase: nextGame.phase,
   });
 
   if (roundsRemaining) {
-    const command = new StartNextRound(game.id, at);
+    const command = new StartNextRound(nextGame.id, at);
     await dispatchCommand(command, ctx);
   }
 }

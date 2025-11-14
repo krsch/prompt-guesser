@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { createCommandContext } from "./support/mocks.js";
 import { SubmitPrompt } from "../src/domain/commands/SubmitPrompt.js";
-import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 import { createGameConfig } from "../src/domain/GameConfig.js";
+import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 
 describe("SubmitPrompt command", () => {
   it("stores the prompt, generates the image, advances the phase to guessing and publishes events", async () => {

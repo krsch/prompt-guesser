@@ -6,8 +6,8 @@ import {
   assertValidRoundState,
   getShuffledPrompts,
 } from "../src/domain/entities/RoundRules.js";
-import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 import { createGameConfig } from "../src/domain/GameConfig.js";
+import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 
 type RoundOverrides = Partial<Omit<RoundState, "prompts" | "votes">> & {
   readonly prompts?: Record<string, string>;

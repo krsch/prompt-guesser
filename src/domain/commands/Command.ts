@@ -1,7 +1,7 @@
+import type { GameGateway } from "../ports/GameGateway.js";
 import type { ImageGenerator } from "../ports/ImageGenerator.js";
 import type { Logger } from "../ports/Logger.js";
 import type { MessageBus } from "../ports/MessageBus.js";
-import type { GameGateway } from "../ports/GameGateway.js";
 import type { RoundGateway } from "../ports/RoundGateway.js";
 import type { Scheduler } from "../ports/Scheduler.js";
 import type { TimePoint } from "../typedefs.js";

@@ -41,11 +41,7 @@ export class StartNextRound extends Command {
 
     await gameGateway.saveGameState(game);
 
-    await scheduler.scheduleTimeout(
-      round.id,
-      "prompt",
-      game.config.promptDurationMs,
-    );
+    await scheduler.scheduleTimeout(round.id, "prompt", game.config.promptDurationMs);
 
     logger?.info?.("Round started", {
       type: this.type,
@@ -84,10 +80,16 @@ export class StartNextRound extends Command {
   }
 
   private static resolveActivePlayer(
-    players: PlayerId[],
+    players: readonly PlayerId[],
     roundIndex: number,
   ): PlayerId {
     const index = roundIndex % players.length;
-    return players[index]!;
+    const player = players[index];
+
+    if (player === undefined) {
+      throw StartNextRoundInputError.because(["Game has no eligible active player"]);
+    }
+
+    return player;
   }
 }

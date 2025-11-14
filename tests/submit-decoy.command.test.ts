@@ -60,7 +60,11 @@ describe("SubmitDecoy command", () => {
     const command = new SubmitDecoy(round.id, PLAYERS[1], "blue decoy", now);
     await command.execute(context);
 
-    expect(roundGateway.appendPrompt).toHaveBeenCalledWith(round.id, PLAYERS[1], "blue decoy");
+    expect(roundGateway.appendPrompt).toHaveBeenCalledWith(
+      round.id,
+      PLAYERS[1],
+      "blue decoy",
+    );
     expect(roundGateway.saveRoundState).toHaveBeenCalledTimes(1);
     const [savedState] = roundGateway.saveRoundState.mock.calls[0] ?? [];
     if (!savedState) {

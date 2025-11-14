@@ -21,6 +21,7 @@ type RoundOverrides = Partial<Omit<RoundState, "prompts" | "votes" | "scores">> 
 function makeState(overrides: RoundOverrides = {}): RoundState {
   return {
     id: "round-1",
+    gameId: "game-1",
     players: ["alice", "bob"] as const satisfies readonly string[],
     activePlayer: "alice",
     phase: "prompt",

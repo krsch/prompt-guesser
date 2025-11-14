@@ -1,11 +1,7 @@
 /* eslint-disable functional/immutable-data */
 /* eslint-disable functional/prefer-readonly-type */
-import type {
-  GameGateway,
-  GameId,
-  GameState,
-} from "../../domain/ports/GameGateway.js";
 import type { GameConfig } from "../../domain/GameConfig.js";
+import type { GameGateway, GameId, GameState } from "../../domain/ports/GameGateway.js";
 import type { PlayerId } from "../../domain/typedefs.js";
 
 export class InMemoryGameGateway implements GameGateway {
@@ -33,7 +29,6 @@ export class InMemoryGameGateway implements GameGateway {
       id,
       players: [host],
       host,
-      activeRoundId: undefined,
       currentRoundIndex: 0,
       cumulativeScores: { [host]: 0 },
       config: { ...config },

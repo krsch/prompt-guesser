@@ -29,7 +29,7 @@ describe("InMemoryGameGateway", () => {
     const game = await gateway.createGame("host", config);
 
     game.players.push("guest");
-    game.cumulativeScores.guest = 0;
+    game.cumulativeScores["guest"] = 0;
     game.phase = "active";
 
     await gateway.saveGameState(game);
@@ -44,6 +44,8 @@ describe("InMemoryGameGateway", () => {
     const game = await gateway.createGame("host", config);
 
     await expect(gateway.loadGameState("missing" as never)).rejects.toThrow();
-    await expect(gateway.saveGameState({ ...game, id: "missing" as never })).rejects.toThrow();
+    await expect(
+      gateway.saveGameState({ ...game, id: "missing" as never }),
+    ).rejects.toThrow();
   });
 });

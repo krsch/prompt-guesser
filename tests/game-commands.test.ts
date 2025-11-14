@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { createCommandContext } from "./support/mocks.js";
 import { CreateGame } from "../src/domain/commands/CreateGame.js";
 import { JoinGame } from "../src/domain/commands/JoinGame.js";
-import { createCommandContext } from "./support/mocks.js";
 import { GameCommandInputError } from "../src/domain/errors/GameCommandInputError.js";
 import { createGameConfig } from "../src/domain/GameConfig.js";
 
@@ -16,7 +16,6 @@ describe("Game commands", () => {
       id: "game-1",
       players: ["host"],
       host: "host",
-      activeRoundId: undefined,
       currentRoundIndex: 0,
       cumulativeScores: { host: 0 },
       config,
@@ -48,7 +47,6 @@ describe("Game commands", () => {
       id: "game-1",
       players: ["host"],
       host: "host",
-      activeRoundId: undefined,
       currentRoundIndex: 0,
       cumulativeScores: { host: 0 },
       config: createGameConfig(),
@@ -98,8 +96,8 @@ describe("Game commands", () => {
   it("rejects invalid game configurations", () => {
     const invalidConfig = createGameConfig({ totalRounds: 0 });
 
-    expect(
-      () => new CreateGame("host", invalidConfig, Date.now()),
-    ).toThrow(GameCommandInputError);
+    expect(() => new CreateGame("host", invalidConfig, Date.now())).toThrow(
+      GameCommandInputError,
+    );
   });
 });

@@ -107,7 +107,7 @@ export async function updateGameAfterRound(
     game.cumulativeScores[player]! += scores[player]!;
   }
 
-  game.activeRoundId = undefined;
+  delete game.activeRoundId;
   game.currentRoundIndex += 1;
 
   const roundsRemaining = game.currentRoundIndex < game.config.totalRounds;

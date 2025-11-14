@@ -5,11 +5,9 @@ export interface GameConfig {
   readonly votingDurationMs: number;
 }
 
-export interface GameConfigOverrides extends Partial<GameConfig> {}
+export type GameConfigOverrides = Partial<GameConfig>;
 
-export function createGameConfig(
-  overrides: GameConfigOverrides = {},
-): GameConfig {
+export function createGameConfig(overrides: GameConfigOverrides = {}): GameConfig {
   return {
     totalRounds: overrides.totalRounds ?? 3,
     promptDurationMs: overrides.promptDurationMs ?? 45_000,

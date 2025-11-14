@@ -1,25 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import { StartNextRound } from "../src/domain/commands/StartNextRound.js";
 import { createCommandContext } from "./support/mocks.js";
+import { StartNextRound } from "../src/domain/commands/StartNextRound.js";
 import { StartNextRoundInputError } from "../src/domain/errors/StartNextRoundInputError.js";
 import { createGameConfig } from "../src/domain/GameConfig.js";
+import type { GameState } from "../src/domain/ports/GameGateway.js";
+import type { RoundState } from "../src/domain/ports/RoundGateway.js";
 
 const GAME_ID = "game-1";
 const PLAYERS = ["alex", "bailey", "casey", "devon"] as const satisfies readonly string[];
 
-const baseGameState = () => ({
+const baseGameState = (): GameState => ({
   id: GAME_ID,
   players: [...PLAYERS],
   host: PLAYERS[0],
-  activeRoundId: undefined,
   currentRoundIndex: 0,
   cumulativeScores: Object.fromEntries(PLAYERS.map((player) => [player, 0])),
   config: createGameConfig({ totalRounds: 3 }),
   phase: "lobby" as const,
 });
 
-const baseRoundState = (roundId: string, activePlayer: string) => ({
+const baseRoundState = (roundId: string, activePlayer: string): RoundState => ({
   id: roundId,
   gameId: GAME_ID,
   players: [...PLAYERS],
@@ -90,7 +91,11 @@ describe("StartNextRound command", () => {
   it("throws when the game already has an active round", async () => {
     const context = createCommandContext();
     const { gameGateway } = context;
-    const gameState = { ...baseGameState(), activeRoundId: "round-99", phase: "active" as const };
+    const gameState = {
+      ...baseGameState(),
+      activeRoundId: "round-99",
+      phase: "active" as const,
+    };
     gameGateway.loadGameState.mockResolvedValue(gameState);
 
     const command = new StartNextRound(GAME_ID, Date.now());

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { createCommandContext } from "./support/mocks.js";
 import { SubmitVote } from "../src/domain/commands/SubmitVote.js";
+import { createGameConfig } from "../src/domain/GameConfig.js";
 import type { RoundState, ValidRoundState } from "../src/domain/ports/RoundGateway.js";
 import type { PlayerId } from "../src/domain/typedefs.js";
-import { createGameConfig } from "../src/domain/GameConfig.js";
 
 const PLAYERS = [
   "active",

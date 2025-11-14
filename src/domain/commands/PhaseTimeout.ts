@@ -51,7 +51,7 @@ export class PhaseTimeout extends Command {
       });
 
       const game = await gameGateway.loadGameState(state.gameId);
-      await updateGameAfterRound(game, state, state.scores, this.at, ctx);
+      await updateGameAfterRound(game, state.id, state.scores, this.at, ctx);
       return;
     }
 

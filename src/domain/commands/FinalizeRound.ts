@@ -2,7 +2,7 @@
 import { canonicalSubmittedPlayers } from "../entities/RoundRules.js";
 import type { GameState } from "../ports/GameGateway.js";
 import type { ValidRoundState } from "../ports/RoundGateway.js";
-import type { PlayerId, TimePoint } from "../typedefs.js";
+import type { PlayerId, RoundId, TimePoint } from "../typedefs.js";
 import type { CommandContext } from "./Command.js";
 import { dispatchCommand } from "./dispatchCommand.js";
 import { StartNextRound } from "./StartNextRound.js";
@@ -88,23 +88,21 @@ export async function finalizeRound(
   });
 
   const game = await gameGateway.loadGameState(state.gameId);
-  await updateGameAfterRound(game, finstate, scores, at, ctx);
+  await updateGameAfterRound(game, finstate.id, scores, at, ctx);
 }
 
 export async function updateGameAfterRound(
   game: GameState,
-  round: ValidRoundState | { readonly id: string },
+  roundId: RoundId,
   scores: Record<PlayerId, number>,
   at: TimePoint,
   ctx: CommandContext,
 ): Promise<void> {
   const { gameGateway, logger } = ctx;
 
-  for (const player of Object.keys(scores)) {
-    if (game.cumulativeScores[player] === undefined) {
-      game.cumulativeScores[player] = 0;
-    }
-    game.cumulativeScores[player]! += scores[player]!;
+  for (const [playerId, score] of Object.entries(scores)) {
+    game.cumulativeScores[playerId] =
+      (game.cumulativeScores[playerId] ?? 0) + score;
   }
 
   delete game.activeRoundId;
@@ -121,7 +119,7 @@ export async function updateGameAfterRound(
   logger?.info?.("Game state updated after round", {
     type: "FinalizeRound",
     gameId: game.id,
-    roundId: round.id,
+    roundId,
     at,
     phase: game.phase,
   });

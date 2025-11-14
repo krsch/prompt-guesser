@@ -16,8 +16,9 @@ export class OpenAIImageGenerator implements ImageGenerator {
   readonly #apiKey: string;
   readonly #model: string;
   readonly #size: string;
-  readonly #cache = new Map<string, string>();
-  #logger: Logger | undefined;
+  // eslint-disable-next-line functional/prefer-readonly-type
+  #cache: ReadonlyMap<string, string> = new Map();
+  readonly #logger: Logger | undefined;
 
   constructor({ apiKey, model = "gpt-image-1", size = "1024x1024", logger }: OpenAIImageGeneratorOptions) {
     if (!apiKey) {
@@ -62,7 +63,9 @@ export class OpenAIImageGenerator implements ImageGenerator {
       throw new Error("OpenAI response did not include an image URL");
     }
 
-    this.#cache.set(prompt, url);
+    const nextCache = new Map([...this.#cache.entries(), [prompt, url] as const]);
+    // eslint-disable-next-line functional/immutable-data
+    this.#cache = nextCache;
     this.#logger?.info?.("Image generated", { prompt });
     return url;
   }

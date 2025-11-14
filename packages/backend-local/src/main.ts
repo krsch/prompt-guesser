@@ -1,27 +1,27 @@
 import { serve } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
-import { Hono } from "hono";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import type { WSContext } from "hono/ws";
-import type { WebSocket } from "ws";
-
 import { InMemoryRoundGateway } from "@prompt-guesser/core/adapters/in-memory/InMemoryRoundGateway.js";
-import { GameConfig } from "@prompt-guesser/core/domain/GameConfig.js";
+import type { CommandContext } from "@prompt-guesser/core/domain/commands/Command.js";
+import { StartNewRound } from "@prompt-guesser/core/domain/commands/StartNewRound.js";
 import { SubmitDecoy } from "@prompt-guesser/core/domain/commands/SubmitDecoy.js";
 import { SubmitPrompt } from "@prompt-guesser/core/domain/commands/SubmitPrompt.js";
 import { SubmitVote } from "@prompt-guesser/core/domain/commands/SubmitVote.js";
-import { StartNewRound } from "@prompt-guesser/core/domain/commands/StartNewRound.js";
-import type { CommandContext } from "@prompt-guesser/core/domain/commands/Command.js";
-import type { RoundId } from "@prompt-guesser/core/domain/typedefs.js";
-import { dispatchCommand } from "./dispatchCommand.js";
-import { RealScheduler } from "./adapters/RealScheduler.js";
-import { WebSocketBus } from "./adapters/WebSocketBus.js";
-import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
-import { createConsoleLogger } from "./logger.js";
+import { GameConfig } from "@prompt-guesser/core/domain/GameConfig.js";
 import type { ImageGenerator } from "@prompt-guesser/core/domain/ports/ImageGenerator.js";
 import type { Logger } from "@prompt-guesser/core/domain/ports/Logger.js";
+import type { RoundId } from "@prompt-guesser/core/domain/typedefs.js";
+import { Hono } from "hono";
+import type { WSContext } from "hono/ws";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { WebSocket } from "ws";
+
+import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
+import { RealScheduler } from "./adapters/RealScheduler.js";
+import { WebSocketBus } from "./adapters/WebSocketBus.js";
+import { dispatchCommand } from "./dispatchCommand.js";
+import { createConsoleLogger } from "./logger.js";
 
 const DEFAULT_PORT = Number(process.env["PORT"] ?? 8787);
 const OPENAI_API_KEY = process.env["OPENAI_API_KEY"] ?? "";
@@ -46,7 +46,7 @@ export async function startServer(): Promise<void> {
 
   scheduler = new RealScheduler({
     dispatch: dispatchCommand,
-    contextFactory: async () => createContext(),
+    contextFactory: async (): Promise<CommandContext> => createContext(),
     logger,
   });
 
@@ -54,7 +54,7 @@ export async function startServer(): Promise<void> {
 
   const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
 
-  app.use("/api/*", async (c, next) => {
+  app.use("/api/*", async (c, next): Promise<Response> => {
     c.header("Access-Control-Allow-Origin", "*");
     c.header("Access-Control-Allow-Headers", "Content-Type");
     c.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -62,6 +62,7 @@ export async function startServer(): Promise<void> {
       return c.json({ ok: true });
     }
     await next();
+    return c.res;
   });
 
   app.get("/api/health", (c) =>
@@ -193,7 +194,7 @@ export async function startServer(): Promise<void> {
     upgradeWebSocket((c) => {
       const roundId = c.req.param("roundId");
       return {
-        onOpen(_, socket) {
+        onOpen(_: unknown, socket: WebSocket): void {
           const context = socket as WSContext<WebSocket>;
           const rawSocket = context.raw ?? ((socket as unknown) as WebSocket);
           bus.attach(`round:${roundId}`, rawSocket);
@@ -204,7 +205,7 @@ export async function startServer(): Promise<void> {
 
   const frontendPath = resolveFrontendPath();
   if (frontendPath) {
-    app.get("/*", async (c) => {
+    app.get("/*", async (c): Promise<Response> => {
       const filePath = join(frontendPath, "index.html");
       if (!existsSync(filePath)) {
         return c.json({ error: "Frontend build not found" }, 404);
@@ -254,6 +255,6 @@ function createImageGenerator(logger: Logger): ImageGenerator {
 }
 
 void startServer().catch((error) => {
-  console.error("Failed to start backend", error);
-  process.exitCode = 1;
+  createConsoleLogger("backend-local").error("Failed to start backend", { error });
+  process.exit(1);
 });

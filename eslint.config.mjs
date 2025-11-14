@@ -8,6 +8,7 @@ import importPlugin from "eslint-plugin-import";
 import functional from "eslint-plugin-functional";
 import boundaries from "eslint-plugin-boundaries";
 import prettierConfig from "eslint-config-prettier";
+import globals from "globals";
 
 export default [
   // --- Ignore patterns (replaces .eslintignore) ---
@@ -20,7 +21,11 @@ export default [
     files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
       parser: tsParser,
-      parserOptions: { project: "./tsconfig.json", sourceType: "module" },
+      parserOptions: { project: "./tsconfig.eslint.json", sourceType: "module" },
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+      },
     },
     plugins: {
       "@typescript-eslint": tsPlugin,

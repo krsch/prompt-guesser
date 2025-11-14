@@ -1,5 +1,5 @@
-import type { MessageBus } from "@prompt-guesser/core/domain/ports/MessageBus.js";
 import type { Logger } from "@prompt-guesser/core/domain/ports/Logger.js";
+import type { MessageBus } from "@prompt-guesser/core/domain/ports/MessageBus.js";
 import type { WebSocket } from "ws";
 
 export interface PublishedEvent<TEvent extends object = object> {
@@ -15,9 +15,11 @@ type Listener = {
 };
 
 export class WebSocketBus implements MessageBus {
-  readonly #clients = new Map<string, Set<WebSocket>>();
-  readonly #listeners = new Set<Listener>();
-  #logger: Logger | undefined;
+  // eslint-disable-next-line functional/prefer-readonly-type
+  #clients: ReadonlyMap<string, ReadonlySet<WebSocket>> = new Map();
+  // eslint-disable-next-line functional/prefer-readonly-type
+  #listeners: ReadonlySet<Listener> = new Set();
+  readonly #logger: Logger | undefined;
 
   constructor(logger?: Logger) {
     this.#logger = logger;
@@ -41,10 +43,16 @@ export class WebSocketBus implements MessageBus {
       }
     }
 
-    for (const listener of this.#listeners) {
+    for (const listener of Array.from(this.#listeners)) {
       if (listener.predicate(payload)) {
-        listener.timeout && clearTimeout(listener.timeout);
-        this.#listeners.delete(listener);
+        if (listener.timeout) {
+          clearTimeout(listener.timeout);
+        }
+        const remainingListeners = new Set(
+          [...this.#listeners].filter((existing) => existing !== listener),
+        );
+        // eslint-disable-next-line functional/immutable-data
+        this.#listeners = remainingListeners;
         listener.resolve(payload);
       }
     }
@@ -53,20 +61,44 @@ export class WebSocketBus implements MessageBus {
   }
 
   attach(channel: string, socket: WebSocket): void {
-    const connections = this.#clients.get(channel) ?? new Set<WebSocket>();
-    connections.add(socket);
-    this.#clients.set(channel, connections);
+    const existingConnections = this.#clients.get(channel) ?? new Set<WebSocket>();
+    const nextConnections = new Set([...existingConnections, socket]);
+    const clientsWithoutChannel = new Map(
+      [...this.#clients.entries()].filter(([existingChannel]) => existingChannel !== channel),
+    );
+    const nextClients = new Map([
+      ...clientsWithoutChannel.entries(),
+      [channel, nextConnections] as const,
+    ]);
+    // eslint-disable-next-line functional/immutable-data
+    this.#clients = nextClients;
 
-    this.#logger?.info?.("WebSocket client attached", { channel, size: connections.size });
+    this.#logger?.info?.("WebSocket client attached", {
+      channel,
+      size: nextConnections.size,
+    });
 
     socket.on("close", () => {
-      connections.delete(socket);
-      if (connections.size === 0) {
-        this.#clients.delete(channel);
+      const currentConnections = this.#clients.get(channel);
+      if (!currentConnections) {
+        return;
       }
+      const reducedConnections = new Set([...currentConnections].filter((client) => client !== socket));
+      const clientsWithoutChannel = new Map(
+        [...this.#clients.entries()].filter(([existingChannel]) => existingChannel !== channel),
+      );
+      const updatedClients =
+        reducedConnections.size === 0
+          ? clientsWithoutChannel
+          : new Map([
+              ...clientsWithoutChannel.entries(),
+              [channel, reducedConnections] as const,
+            ]);
+      // eslint-disable-next-line functional/immutable-data
+      this.#clients = updatedClients;
       this.#logger?.info?.("WebSocket client disconnected", {
         channel,
-        size: connections.size,
+        size: reducedConnections.size,
       });
     });
 
@@ -85,7 +117,11 @@ export class WebSocketBus implements MessageBus {
       const timeout =
         timeoutMs > 0
           ? setTimeout(() => {
-              this.#listeners.delete(listener);
+              const remaining = new Set(
+                [...this.#listeners].filter((existing) => existing !== listener),
+              );
+              // eslint-disable-next-line functional/immutable-data
+              this.#listeners = remaining;
               reject(new Error("Timed out waiting for event"));
             }, timeoutMs)
           : undefined;
@@ -94,7 +130,9 @@ export class WebSocketBus implements MessageBus {
         ? { predicate, resolve, reject, timeout }
         : { predicate, resolve, reject };
 
-      this.#listeners.add(listener);
+      const listeners = new Set([...this.#listeners, listener]);
+      // eslint-disable-next-line functional/immutable-data
+      this.#listeners = listeners;
     });
   }
 }

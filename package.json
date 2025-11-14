@@ -44,6 +44,7 @@
     "eslint-plugin-boundaries": "^5.1.0",
     "eslint-plugin-functional": "^9.0.2",
     "eslint-plugin-import": "^2.32.0",
+    "globals": "^16.5.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"

@@ -64,7 +64,9 @@ export class WebSocketBus implements MessageBus {
     const existingConnections = this.#clients.get(channel) ?? new Set<WebSocket>();
     const nextConnections = new Set([...existingConnections, socket]);
     const clientsWithoutChannel = new Map(
-      [...this.#clients.entries()].filter(([existingChannel]) => existingChannel !== channel),
+      [...this.#clients.entries()].filter(
+        ([existingChannel]) => existingChannel !== channel,
+      ),
     );
     const nextClients = new Map([
       ...clientsWithoutChannel.entries(),
@@ -83,9 +85,13 @@ export class WebSocketBus implements MessageBus {
       if (!currentConnections) {
         return;
       }
-      const reducedConnections = new Set([...currentConnections].filter((client) => client !== socket));
+      const reducedConnections = new Set(
+        [...currentConnections].filter((client) => client !== socket),
+      );
       const clientsWithoutChannel = new Map(
-        [...this.#clients.entries()].filter(([existingChannel]) => existingChannel !== channel),
+        [...this.#clients.entries()].filter(
+          ([existingChannel]) => existingChannel !== channel,
+        ),
       );
       const updatedClients =
         reducedConnections.size === 0
@@ -107,10 +113,7 @@ export class WebSocketBus implements MessageBus {
     });
   }
 
-  waitFor(
-    predicate: Listener["predicate"],
-    timeoutMs = 5000,
-  ): Promise<PublishedEvent> {
+  waitFor(predicate: Listener["predicate"], timeoutMs = 5000): Promise<PublishedEvent> {
     return new Promise<PublishedEvent>((resolve, reject) => {
       let listener: Listener;
 

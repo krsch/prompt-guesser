@@ -20,7 +20,12 @@ export class OpenAIImageGenerator implements ImageGenerator {
   #cache: ReadonlyMap<string, string> = new Map();
   readonly #logger: Logger | undefined;
 
-  constructor({ apiKey, model = "gpt-image-1", size = "1024x1024", logger }: OpenAIImageGeneratorOptions) {
+  constructor({
+    apiKey,
+    model = "gpt-image-1",
+    size = "1024x1024",
+    logger,
+  }: OpenAIImageGeneratorOptions) {
     if (!apiKey) {
       throw new Error("OPENAI_API_KEY is required to generate images");
     }

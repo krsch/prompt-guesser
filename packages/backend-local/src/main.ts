@@ -11,11 +11,9 @@ import type { ImageGenerator } from "@prompt-guesser/core/domain/ports/ImageGene
 import type { Logger } from "@prompt-guesser/core/domain/ports/Logger.js";
 import type { RoundId } from "@prompt-guesser/core/domain/typedefs.js";
 import { Hono } from "hono";
-import type { WSContext } from "hono/ws";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { WebSocket } from "ws";
 
 import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
 import { RealScheduler } from "./adapters/RealScheduler.js";
@@ -70,10 +68,12 @@ export async function startServer(): Promise<void> {
   );
 
   app.post("/api/round/start", async (c) => {
-    const body = await c.req.json<{
-      readonly players: readonly string[];
-      readonly activePlayer?: string;
-    }>().catch(() => null);
+    const body = await c.req
+      .json<{
+        readonly players: readonly string[];
+        readonly activePlayer?: string;
+      }>()
+      .catch(() => null);
 
     if (!body || !Array.isArray(body.players) || body.players.length === 0) {
       return c.json({ error: "players array is required" }, 400);
@@ -96,8 +96,7 @@ export async function startServer(): Promise<void> {
     const eventPromise = bus.waitFor(
       ({ event }) =>
         (event as { readonly type?: string; readonly at?: number }).type ===
-          "RoundStarted" &&
-        (event as { readonly at?: number }).at === now,
+          "RoundStarted" && (event as { readonly at?: number }).at === now,
       2000,
     );
 
@@ -125,10 +124,12 @@ export async function startServer(): Promise<void> {
 
   app.post("/api/round/:id/prompt", async (c) => {
     const roundId = c.req.param("id") as RoundId;
-    const body = await c.req.json<{
-      readonly playerId: string;
-      readonly prompt: string;
-    }>().catch(() => null);
+    const body = await c.req
+      .json<{
+        readonly playerId: string;
+        readonly prompt: string;
+      }>()
+      .catch(() => null);
 
     if (!body || typeof body.playerId !== "string" || typeof body.prompt !== "string") {
       return c.json({ error: "playerId and prompt are required" }, 400);
@@ -147,10 +148,12 @@ export async function startServer(): Promise<void> {
 
   app.post("/api/round/:id/decoy", async (c) => {
     const roundId = c.req.param("id") as RoundId;
-    const body = await c.req.json<{
-      readonly playerId: string;
-      readonly prompt: string;
-    }>().catch(() => null);
+    const body = await c.req
+      .json<{
+        readonly playerId: string;
+        readonly prompt: string;
+      }>()
+      .catch(() => null);
 
     if (!body || typeof body.playerId !== "string" || typeof body.prompt !== "string") {
       return c.json({ error: "playerId and prompt are required" }, 400);
@@ -169,12 +172,18 @@ export async function startServer(): Promise<void> {
 
   app.post("/api/round/:id/vote", async (c) => {
     const roundId = c.req.param("id") as RoundId;
-    const body = await c.req.json<{
-      readonly playerId: string;
-      readonly promptIndex: number;
-    }>().catch(() => null);
+    const body = await c.req
+      .json<{
+        readonly playerId: string;
+        readonly promptIndex: number;
+      }>()
+      .catch(() => null);
 
-    if (!body || typeof body.playerId !== "string" || typeof body.promptIndex !== "number") {
+    if (
+      !body ||
+      typeof body.playerId !== "string" ||
+      typeof body.promptIndex !== "number"
+    ) {
       return c.json({ error: "playerId and promptIndex are required" }, 400);
     }
 
@@ -194,9 +203,12 @@ export async function startServer(): Promise<void> {
     upgradeWebSocket((c) => {
       const roundId = c.req.param("roundId");
       return {
-        onOpen(_: unknown, socket: WebSocket): void {
-          const context = socket as WSContext<WebSocket>;
-          const rawSocket = context.raw ?? ((socket as unknown) as WebSocket);
+        onOpen(_event, ws): void {
+          const rawSocket = ws.raw;
+          if (!rawSocket) {
+            logger.warn("WebSocket connection missing raw handle", { roundId });
+            return;
+          }
           bus.attach(`round:${roundId}`, rawSocket);
         },
       };

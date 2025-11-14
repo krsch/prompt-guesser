@@ -8,7 +8,7 @@ export interface GameState {
   readonly id: GameId;
   players: PlayerId[];
   readonly host: PlayerId;
-  activeRoundId?: RoundId;
+  activeRoundId: RoundId | undefined;
   currentRoundIndex: number;
   cumulativeScores: Record<PlayerId, number>;
   readonly config: GameConfig;

@@ -14,6 +14,7 @@ const baseGameState = (): GameState => ({
   id: GAME_ID,
   players: [...PLAYERS],
   host: PLAYERS[0],
+  activeRoundId: undefined,
   currentRoundIndex: 0,
   cumulativeScores: Object.fromEntries(PLAYERS.map((player) => [player, 0])),
   config: createGameConfig({ totalRounds: 3 }),

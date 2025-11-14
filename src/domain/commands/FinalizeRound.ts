@@ -122,7 +122,8 @@ export async function updateGameAfterRound(
   const nextPhase = roundsRemaining ? game.phase : "finished";
 
   const nextGame: GameState = {
-    ...withoutActiveRoundId(game),
+    ...game,
+    activeRoundId: undefined,
     cumulativeScores,
     currentRoundIndex: nextRoundIndex,
     phase: nextPhase,
@@ -142,10 +143,4 @@ export async function updateGameAfterRound(
     const command = new StartNextRound(nextGame.id, at);
     await dispatchCommand(command, ctx);
   }
-}
-
-function withoutActiveRoundId(game: GameState): Omit<GameState, "activeRoundId"> {
-  const { activeRoundId: removedActiveRoundId, ...rest } = game;
-  void removedActiveRoundId;
-  return rest;
 }

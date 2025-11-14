@@ -29,6 +29,7 @@ export class InMemoryGameGateway implements GameGateway {
       id,
       players: [host],
       host,
+      activeRoundId: undefined,
       currentRoundIndex: 0,
       cumulativeScores: { [host]: 0 },
       config: { ...config },

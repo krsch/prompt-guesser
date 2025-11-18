@@ -1,5 +1,4 @@
-import type { Command } from "@prompt-guesser/core/domain/commands/Command.js";
-import type { CommandContext } from "@prompt-guesser/core/domain/commands/Command.js";
+import type { Command, CommandContext } from "./commands/Command.js";
 
 export async function dispatchCommand(
   command: Command,

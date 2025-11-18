@@ -22,10 +22,7 @@ export default [
     languageOptions: {
       parser: tsParser,
       parserOptions: { project: "./tsconfig.eslint.json", sourceType: "module" },
-      globals: {
-        ...globals.node,
-        ...globals.browser,
-      },
+      globals: globals.node,
     },
     plugins: {
       "@typescript-eslint": tsPlugin,

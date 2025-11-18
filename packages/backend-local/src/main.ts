@@ -6,6 +6,7 @@ import { StartNewRound } from "@prompt-guesser/core/domain/commands/StartNewRoun
 import { SubmitDecoy } from "@prompt-guesser/core/domain/commands/SubmitDecoy.js";
 import { SubmitPrompt } from "@prompt-guesser/core/domain/commands/SubmitPrompt.js";
 import { SubmitVote } from "@prompt-guesser/core/domain/commands/SubmitVote.js";
+import { dispatchCommand } from "@prompt-guesser/core/domain/dispatchCommand.js";
 import { GameConfig } from "@prompt-guesser/core/domain/GameConfig.js";
 import type { ImageGenerator } from "@prompt-guesser/core/domain/ports/ImageGenerator.js";
 import type { Logger } from "@prompt-guesser/core/domain/ports/Logger.js";
@@ -18,7 +19,6 @@ import { fileURLToPath } from "node:url";
 import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
 import { RealScheduler } from "./adapters/RealScheduler.js";
 import { WebSocketBus } from "./adapters/WebSocketBus.js";
-import { dispatchCommand } from "./dispatchCommand.js";
 import { createConsoleLogger } from "./logger.js";
 
 const DEFAULT_PORT = Number(process.env["PORT"] ?? 8787);
@@ -43,7 +43,6 @@ export async function startServer(): Promise<void> {
   });
 
   scheduler = new RealScheduler({
-    dispatch: dispatchCommand,
     contextFactory: async (): Promise<CommandContext> => createContext(),
     logger,
   });

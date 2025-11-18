@@ -11,7 +11,7 @@
 - **Event-driven timeouts.** We never poll or sleep. Commands carry their own timestamp (`TimePoint`) and the runtime schedules phase transitions externally; the domain remains deterministic and wall-clock agnostic.
 - **Round-focused aggregate.** We model one **Round** (not the entire multi-round game) as the main aggregate (`RoundState`).
 - **Concurrency-conscious persistence.** Storage adapters expose atomic mutations (e.g., `appendPrompt`, `appendVote`) that return up-to-date snapshots. A general `saveRoundState` exists for phase transitions/finalize; adapters choose optimistic or diff-merge internally.
-- **Portable ports.** Domain depends only on ports: `RoundGateway`, `MessageBus`, `ImageGenerator`, `Logger` (typedefs for `RoundId`, `PlayerId`, `TimePoint`, `RoundPhase`).
+- **Portable ports.** Domain depends only on ports: `GameGateway`, `RoundGateway`, `MessageBus`, `ImageGenerator`, `Logger`, `Scheduler` (typedefs for `RoundId`, `PlayerId`, `TimePoint`, `RoundPhase`).
 
 ---
 
@@ -22,34 +22,36 @@
   /domain
     /typedefs.ts            # RoundId, PlayerId, TimePoint, RoundPhase
     /ports
+      GameGateway.ts        # game lifecycle persistence
       RoundGateway.ts       # RoundState + gateway interfaces
       MessageBus.ts
       ImageGenerator.ts
       Logger.ts
+      Scheduler.ts
       index.ts              # barrel export for ports & typedefs
     /entities
-      RoundRules.ts         # pure helpers (validation, shuffling, scoring)
+      RoundRules.ts         # pure helpers (validation, shuffling, prompt lookup)
     /commands
       Command.ts            # base class + CommandContext
       dispatchCommand.ts    # single entrypoint wrapper (logging, errors)
+      StartNextRound.ts     # bootstrap a new round
+      PhaseTransitions.ts   # deterministic phase transition helpers
       SubmitPrompt.ts       # active player submits real prompt
-      SubmitDecoy.ts        # non-active player submits decoy (optional alias of SubmitPrompt)
+      SubmitDecoy.ts        # non-active player submits decoy
       SubmitVote.ts         # player votes by index
+      FinalizeRound.ts      # compute & persist scores, finish round
       PhaseTimeout.ts       # system-triggered timeout for a phase
-      FinalizeScoring.ts    # compute & persist scores, finish round
-    /tests
-      unit/                 # pure unit tests for rules/helpers
-      contract/             # gateway/message bus contract tests
   /adapters
-    /round-gateway
-      dynamo.ts             # DynamoDB implementation (atomic updates)
-      postgres.ts           # SQL/JSONB implementation
-      memory.ts             # in-memory (for tests/dev)
-    /message-bus
-      ws.ts                 # WebSocket/pubsub adapter
-      noop.ts               # no-op bus for tests
-    /image-generator
-      openai.ts             # example external image generation
+    /in-memory
+      InMemoryGameGateway.ts
+      InMemoryRoundGateway.ts
+      InMemoryScheduler.ts
+
+/tests
+  unit/                     # pure unit tests for rules/helpers
+  *.command.test.ts         # command-focused integration tests
+  play-round.integration.test.ts
+  support/                  # shared test utilities
 ```
 
 ---
@@ -62,25 +64,50 @@
 - `type PlayerId = string`
 - `type TimePoint = number` (ms since epoch)
 - `type RoundPhase = "prompt" | "guessing" | "voting" | "scoring" | "finished"`
+- `type GameId = string` (declared in `domain/ports/GameGateway`)
 
 ### 3.2 RoundState (authoritative round snapshot)
 
 ```ts
 export interface RoundState {
-  id: RoundId;
-  players: PlayerId[];
-  activePlayer: PlayerId;
+  readonly id: RoundId;
+  readonly gameId: GameId;
+  readonly players: readonly PlayerId[];
+  readonly activePlayer: PlayerId;
   phase: RoundPhase;
 
   prompts?: Record<PlayerId, string>; // set during guessing (active player's entry is real prompt)
-  shuffleOrder?: number[]; // set at transition to voting
   votes?: Record<PlayerId, number>; // set during voting (index into shuffled prompts)
   scores?: Record<PlayerId, number>; // set at scoring
+  shuffleOrder?: readonly number[]; // set at transition to voting
 
-  startedAt: TimePoint;
+  readonly seed: number; // deterministic RNG seed
+  readonly startedAt: TimePoint;
   imageUrl?: string;
   finishedAt?: TimePoint;
 }
+
+export type ValidRoundState =
+  | (RoundState & { readonly phase: "prompt"; readonly prompts: Record<PlayerId, string> })
+  | (RoundState & {
+      readonly phase: "guessing";
+      readonly prompts: Record<PlayerId, string>;
+      readonly imageUrl: string;
+    })
+  | (RoundState & {
+      readonly phase: "voting";
+      readonly prompts: Record<PlayerId, string>;
+      readonly imageUrl: string;
+      readonly shuffleOrder: readonly number[];
+    })
+  | (RoundState & {
+      readonly phase: "scoring" | "finished";
+      readonly prompts: Record<PlayerId, string>;
+      readonly imageUrl: string;
+      readonly shuffleOrder: readonly number[];
+      readonly votes: Record<PlayerId, number>;
+      readonly scores: Record<PlayerId, number>;
+    });
 ```
 
 The optional `imageUrl` is populated once the real prompt has been accepted and
@@ -92,17 +119,17 @@ not yet produced a shareable image.
 
 ```ts
 export interface PromptAppendResult {
-  inserted: boolean; // false when submission was a duplicate
-  prompts: Record<PlayerId, string>;
+  readonly inserted: boolean; // false when submission was a duplicate
+  readonly prompts: Record<PlayerId, string>;
 }
 
 export interface VoteAppendResult {
-  inserted: boolean;
-  votes: Record<PlayerId, number>;
+  readonly inserted: boolean;
+  readonly votes: Record<PlayerId, number>;
 }
 
 export interface RoundGateway {
-  loadRoundState(roundId: RoundId): Promise<RoundState>;
+  loadRoundState(roundId: RoundId): Promise<ValidRoundState>;
   saveRoundState(state: RoundState): Promise<void>; // adapters choose optimistic or diff-merge
 
   // Atomic mutations that return updated snapshots to avoid update-then-read
@@ -119,7 +146,8 @@ export interface RoundGateway {
   countSubmittedPrompts(roundId: RoundId): Promise<number>;
 
   startNewRound(
-    players: PlayerId[],
+    gameId: GameId,
+    players: readonly PlayerId[],
     activePlayer: PlayerId,
     startedAt: TimePoint,
   ): Promise<RoundState>;
@@ -178,12 +206,12 @@ based on its notion of time, keeping wall-clock orchestration out of the pure do
 ```ts
 // Command.ts
 export interface CommandContext {
-  gateway: RoundGateway;
-  bus: MessageBus;
-  imageGenerator: ImageGenerator;
-  config: GameConfig;
-  scheduler: Scheduler;
-  logger?: Logger;
+  readonly gameGateway: GameGateway;
+  readonly roundGateway: RoundGateway;
+  readonly bus: MessageBus;
+  readonly imageGenerator: ImageGenerator;
+  readonly scheduler: Scheduler;
+  readonly logger?: Logger;
 }
 
 export abstract class Command {
@@ -216,14 +244,11 @@ export async function dispatchCommand(cmd: Command, ctx: CommandContext): Promis
 
 Put deterministic logic here so multiple command implementations can reuse it:
 
-- `assertPhase(state, expected)`
-- `isPlayer(state, playerId)`
-- `hasSubmittedPrompt(state, playerId)`
-- `allPromptsSubmitted(state)`
-- `generateShuffle(state): number[]` and helper accessors for prompt order
-- `calculateScores(state): Record<PlayerId, number>`
+- **Shuffle helpers:** `mulberry32(seed)`, `randomPermutation(length, rng)`, and `generateShuffle(state)` keep voting order deterministic.
+- **Prompt lookup:** `canonicalSubmittedPlayers(state)`, `getShuffledPrompts(state)`, and `promptIndexToPlayerId(state, index)` provide safe access to prompts and their owning players.
+- **Validation:** `assertValidRoundState(state)` enforces phase-specific invariants and narrows the type to `ValidRoundState`.
 
-These never touch adapters; they just process inputs and return outputs.
+These helpers never touch adapters; they just process inputs and return outputs. If new deterministic rules are added, place them here for shared reuse.
 
 ---
 
@@ -303,7 +328,7 @@ Timeouts are scheduled **once per phase**, immediately after each phase transiti
 
 | Phase entered          | Timeout scheduled          | Where it happens           |
 | ---------------------- | -------------------------- | -------------------------- |
-| `prompt`               | `PhaseTimeout("prompt")`   | in `StartNewRound.execute` |
+| `prompt`               | `PhaseTimeout("prompt")`   | in `StartNextRound.execute` |
 | `guessing`             | `PhaseTimeout("guessing")` | in `transitionToGuessing`  |
 | `voting`               | `PhaseTimeout("voting")`   | in `transitionToVoting`    |
 | `scoring` / `finished` | none                       | end of round               |

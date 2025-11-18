@@ -17,7 +17,8 @@
     "lint": "tsc --noEmit && eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "ci": "pnpm exec tsc --noEmit -p tsconfig.json && pnpm exec tsc --noEmit -p tsconfig.vitest.json && pnpm run format:check && pnpm run lint && pnpm run test:coverage"
   },
   "repository": {
     "type": "git",

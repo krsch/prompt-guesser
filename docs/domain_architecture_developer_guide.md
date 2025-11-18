@@ -88,7 +88,10 @@ export interface RoundState {
 }
 
 export type ValidRoundState =
-  | (RoundState & { readonly phase: "prompt"; readonly prompts: Record<PlayerId, string> })
+  | (RoundState & {
+      readonly phase: "prompt";
+      readonly prompts: Record<PlayerId, string>;
+    })
   | (RoundState & {
       readonly phase: "guessing";
       readonly prompts: Record<PlayerId, string>;
@@ -326,12 +329,12 @@ All scheduling now happens through the **`Scheduler` port**, keeping the domain 
 
 Timeouts are scheduled **once per phase**, immediately after each phase transition:
 
-| Phase entered          | Timeout scheduled          | Where it happens           |
-| ---------------------- | -------------------------- | -------------------------- |
+| Phase entered          | Timeout scheduled          | Where it happens            |
+| ---------------------- | -------------------------- | --------------------------- |
 | `prompt`               | `PhaseTimeout("prompt")`   | in `StartNextRound.execute` |
-| `guessing`             | `PhaseTimeout("guessing")` | in `transitionToGuessing`  |
-| `voting`               | `PhaseTimeout("voting")`   | in `transitionToVoting`    |
-| `scoring` / `finished` | none                       | end of round               |
+| `guessing`             | `PhaseTimeout("guessing")` | in `transitionToGuessing`   |
+| `voting`               | `PhaseTimeout("voting")`   | in `transitionToVoting`     |
+| `scoring` / `finished` | none                       | end of round                |
 
 Each call uses the configured duration from `GameConfig`, e.g.:
 

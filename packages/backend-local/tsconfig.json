@@ -9,6 +9,7 @@
     "resolveJsonModule": true,
     "lib": ["ES2022", "DOM"],
     "types": ["node"],
+    "baseUrl": ".",
     "rootDirs": ["src", "../../src"],
     "paths": {
       "@prompt-guesser/core/*": ["../../src/*"]

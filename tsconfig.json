@@ -4,6 +4,10 @@
     /* ---------- File Layout ---------- */
     "rootDir": "src",
     "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@prompt-guesser/core/*": ["src/*"]
+    },
 
     /* ---------- Module & Target ---------- */
     "module": "ESNext",

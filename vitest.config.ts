@@ -1,6 +1,15 @@
 import { defineConfig } from "vitest/config";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT_DIR = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@prompt-guesser/core": resolve(ROOT_DIR, "src"),
+    },
+  },
   test: {
     globals: true,
     environment: "node",

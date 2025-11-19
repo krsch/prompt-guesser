@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import type { Logger } from "@prompt-guesser/core/domain/ports/Logger.js";
+import type { Logger } from "./core.js";
 
 export function createConsoleLogger(namespace: string): Logger {
   const prefix = `[${namespace}]`;

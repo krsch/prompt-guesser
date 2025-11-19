@@ -1,11 +1,5 @@
 import { serve } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
-import { InMemoryRoundGateway } from "@prompt-guesser/core/adapters/in-memory/InMemoryRoundGateway.js";
-import type { CommandContext } from "@prompt-guesser/core/domain/commands/Command.js";
-import { dispatchCommand } from "@prompt-guesser/core/domain/dispatchCommand.js";
-import { GameConfig } from "@prompt-guesser/core/domain/GameConfig.js";
-import type { ImageGenerator } from "@prompt-guesser/core/domain/ports/ImageGenerator.js";
-import type { Logger } from "@prompt-guesser/core/domain/ports/Logger.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +8,8 @@ import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
 import { RealScheduler } from "./adapters/RealScheduler.js";
 import { WebSocketBus } from "./adapters/WebSocketBus.js";
 import { createBackendApp } from "./app.js";
+import { GameConfig, InMemoryRoundGateway, dispatchCommand } from "./core.js";
+import type { CommandContext, ImageGenerator, Logger } from "./core.js";
 import { createConsoleLogger } from "./logger.js";
 
 const DEFAULT_PORT = Number(process.env["PORT"] ?? 8787);

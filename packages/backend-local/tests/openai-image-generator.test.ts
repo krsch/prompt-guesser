@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
-import { OpenAIImageGenerator } from "../../packages/backend-local/src/adapters/OpenAIImageGenerator.js";
+import { OpenAIImageGenerator } from "../src/adapters/OpenAIImageGenerator.js";
 
 const API_KEY = "test-key";
 

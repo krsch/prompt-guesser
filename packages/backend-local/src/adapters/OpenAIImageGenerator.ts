@@ -1,5 +1,4 @@
-import type { ImageGenerator } from "@prompt-guesser/core/domain/ports/ImageGenerator.js";
-import type { Logger } from "@prompt-guesser/core/domain/ports/Logger.js";
+import type { ImageGenerator, Logger } from "../core.js";
 
 interface OpenAIImageGeneratorOptions {
   readonly apiKey: string;

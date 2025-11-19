@@ -4,5 +4,10 @@
     "rootDir": ".",
     "noEmit": true
   },
-  "include": ["src", "tests", "packages/backend-local/src"]
+  "include": [
+    "src",
+    "tests",
+    "packages/backend-local/src",
+    "packages/backend-local/tests"
+  ]
 }

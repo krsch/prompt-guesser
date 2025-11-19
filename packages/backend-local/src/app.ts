@@ -1,18 +1,15 @@
-import type {
-  Command,
-  CommandContext,
-} from "@prompt-guesser/core/domain/commands/Command.js";
-import { StartNewRound } from "@prompt-guesser/core/domain/commands/StartNewRound.js";
-import { SubmitDecoy } from "@prompt-guesser/core/domain/commands/SubmitDecoy.js";
-import { SubmitPrompt } from "@prompt-guesser/core/domain/commands/SubmitPrompt.js";
-import { SubmitVote } from "@prompt-guesser/core/domain/commands/SubmitVote.js";
-import type { Logger } from "@prompt-guesser/core/domain/ports/Logger.js";
-import type { MessageBus } from "@prompt-guesser/core/domain/ports/MessageBus.js";
-import type { RoundGateway } from "@prompt-guesser/core/domain/ports/RoundGateway.js";
-import type { RoundId } from "@prompt-guesser/core/domain/typedefs.js";
 import { Hono } from "hono";
 
 import type { PublishedEvent } from "./adapters/WebSocketBus.js";
+import { StartNewRound, SubmitDecoy, SubmitPrompt, SubmitVote } from "./core.js";
+import type {
+  Command,
+  CommandContext,
+  Logger,
+  MessageBus,
+  RoundGateway,
+  RoundId,
+} from "./core.js";
 
 type DispatchCommand = (command: Command, context: CommandContext) => Promise<void>;
 

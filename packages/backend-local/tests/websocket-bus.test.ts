@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { WebSocket } from "ws";
 
-import { WebSocketBus } from "../../packages/backend-local/src/adapters/WebSocketBus.js";
+import { WebSocketBus } from "../src/adapters/WebSocketBus.js";
 
 interface FakeSocket {
   readonly socket: WebSocket;

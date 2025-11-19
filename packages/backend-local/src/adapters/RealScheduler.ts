@@ -1,11 +1,7 @@
 /* eslint-disable functional/immutable-data */
 /* eslint-disable functional/prefer-readonly-type */
-import type { CommandContext } from "@prompt-guesser/core/domain/commands/Command.js";
-import { PhaseTimeout } from "@prompt-guesser/core/domain/commands/PhaseTimeout.js";
-import { dispatchCommand } from "@prompt-guesser/core/domain/dispatchCommand.js";
-import type { Logger } from "@prompt-guesser/core/domain/ports/Logger.js";
-import type { Scheduler } from "@prompt-guesser/core/domain/ports/Scheduler.js";
-import type { RoundId } from "@prompt-guesser/core/domain/typedefs.js";
+import type { CommandContext, Logger, RoundId, Scheduler } from "../core.js";
+import { PhaseTimeout, dispatchCommand } from "../core.js";
 
 interface RealSchedulerOptions {
   readonly dispatch?: typeof dispatchCommand;

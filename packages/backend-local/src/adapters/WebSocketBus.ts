@@ -1,8 +1,8 @@
 /* eslint-disable functional/immutable-data */
 /* eslint-disable functional/prefer-readonly-type */
-import type { Logger } from "@prompt-guesser/core/domain/ports/Logger.js";
-import type { MessageBus } from "@prompt-guesser/core/domain/ports/MessageBus.js";
 import type { WebSocket } from "ws";
+
+import type { Logger, MessageBus } from "../core.js";
 
 export interface PublishedEvent<TEvent extends object = object> {
   readonly channel: string;

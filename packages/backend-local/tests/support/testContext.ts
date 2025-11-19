@@ -1,20 +1,22 @@
 import { vi } from "vitest";
 
-import type { PublishedEvent } from "../../../packages/backend-local/src/adapters/WebSocketBus.js";
-import type { EventBus } from "../../../packages/backend-local/src/app.js";
-import type { CommandContext } from "../../../src/domain/commands/Command.js";
-import { GameConfig } from "../../../src/domain/GameConfig.js";
-import type { ImageGenerator } from "../../../src/domain/ports/ImageGenerator.js";
-import type { Logger } from "../../../src/domain/ports/Logger.js";
-import type {
-  PromptAppendResult,
-  RoundGateway,
-  RoundState,
-  ValidRoundState,
-  VoteAppendResult,
-} from "../../../src/domain/ports/RoundGateway.js";
-import type { Scheduler } from "../../../src/domain/ports/Scheduler.js";
-import type { PlayerId, RoundId, TimePoint } from "../../../src/domain/typedefs.js";
+import type { PublishedEvent } from "../../src/adapters/WebSocketBus.js";
+import type { EventBus } from "../../src/app.js";
+import {
+  GameConfig,
+  type CommandContext,
+  type ImageGenerator,
+  type Logger,
+  type PlayerId,
+  type PromptAppendResult,
+  type RoundGateway,
+  type RoundId,
+  type RoundState,
+  type Scheduler,
+  type TimePoint,
+  type ValidRoundState,
+  type VoteAppendResult,
+} from "../../src/core.js";
 
 type Waiter = {
   readonly predicate: (payload: PublishedEvent) => boolean;

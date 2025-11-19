@@ -1,12 +1,14 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
-import { RealScheduler } from "../../packages/backend-local/src/adapters/RealScheduler.js";
-import type { CommandContext } from "../../src/domain/commands/Command.js";
-import { PhaseTimeout } from "../../src/domain/commands/PhaseTimeout.js";
-import { GameConfig } from "../../src/domain/GameConfig.js";
-import type { MessageBus } from "../../src/domain/ports/MessageBus.js";
-import type { RoundGateway } from "../../src/domain/ports/RoundGateway.js";
-import type { Scheduler } from "../../src/domain/ports/Scheduler.js";
+import { RealScheduler } from "../src/adapters/RealScheduler.js";
+import {
+  GameConfig,
+  PhaseTimeout,
+  type CommandContext,
+  type MessageBus,
+  type RoundGateway,
+  type Scheduler,
+} from "../src/core.js";
 
 describe("RealScheduler", () => {
   beforeEach(() => {

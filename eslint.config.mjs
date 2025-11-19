@@ -36,6 +36,7 @@ export default [
         { type: "adapter", pattern: "src/adapters/**" },
         { type: "test", pattern: "tests/**" },
       ],
+      "import/internal-regex": "^(?:@prompt-guesser/core|(?:\\.\\./){2,}src/)",
     },
     rules: {
       // --- Base ESLint + TS recommended ---
@@ -88,7 +89,7 @@ export default [
 
   // --- Test overrides ---
   {
-    files: ["tests/**/*", "**/*.test.ts"],
+    files: ["tests/**/*", "packages/backend-local/tests/**/*", "**/*.test.ts"],
     languageOptions: {
       parser: tsParser,
       parserOptions: { project: "./tsconfig.vitest.json", sourceType: "module" },

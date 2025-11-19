@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { createBackendApp } from "../src/app.js";
+import type { Command, CommandContext } from "../src/core.js";
+import { StartNewRound } from "../src/core.js";
 import { createCommandContextFactory, createTestContext } from "./support/testContext.js";
-import { createBackendApp } from "../../packages/backend-local/src/app.js";
-import type { Command, CommandContext } from "../../src/domain/commands/Command.js";
-import { StartNewRound } from "../../src/domain/commands/StartNewRound.js";
 
 type DispatchCommand = (command: Command, context: CommandContext) => Promise<void>;
 

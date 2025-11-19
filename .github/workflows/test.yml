@@ -28,7 +28,7 @@ jobs:
           cache: "pnpm"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --recursive --frozen-lockfile
 
       - name: Type check
         run: pnpm exec tsc --noEmit -p tsconfig.json

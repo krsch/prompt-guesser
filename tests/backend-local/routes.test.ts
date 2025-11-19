@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createCommandContextFactory, createTestContext } from "./support/testContext.js";
 import { createBackendApp } from "../../packages/backend-local/src/app.js";
+import type { Command, CommandContext } from "../../src/domain/commands/Command.js";
 import { StartNewRound } from "../../src/domain/commands/StartNewRound.js";
+
+type DispatchCommand = (command: Command, context: CommandContext) => Promise<void>;
 
 afterEach(() => {
   vi.useRealTimers();
@@ -36,10 +39,12 @@ describe("backend-local HTTP routes", () => {
     const testContext = createTestContext();
     const createContext = createCommandContextFactory(testContext);
 
-    const dispatch = vi.fn(async (command: StartNewRound, context) => {
+    const dispatchSpy = vi.fn(async (command: Command, context: CommandContext) => {
       expect(command).toBeInstanceOf(StartNewRound);
       await command.execute(context);
     });
+    const dispatch: DispatchCommand = async (command, context) =>
+      dispatchSpy(command, context);
 
     const app = createBackendApp({
       port: 9999,
@@ -67,7 +72,7 @@ describe("backend-local HTTP routes", () => {
       promptDurationMs: testContext.config.promptDurationMs,
     });
 
-    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
     expect(testContext.scheduler.scheduled).toContainEqual({
       roundId: "round-1",
       phase: "prompt",
@@ -103,9 +108,11 @@ describe("backend-local HTTP routes", () => {
   it("loads a round snapshot", async () => {
     const testContext = createTestContext();
     const createContext = createCommandContextFactory(testContext);
-    const dispatch = vi.fn(async (command, context) => {
+    const dispatchSpy = vi.fn(async (command: Command, context: CommandContext) => {
       await command.execute(context);
     });
+    const dispatch: DispatchCommand = async (command, context) =>
+      dispatchSpy(command, context);
 
     const app = createBackendApp({
       port: 9999,

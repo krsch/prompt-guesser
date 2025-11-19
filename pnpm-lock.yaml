@@ -44,6 +44,9 @@ importers:
       globals:
         specifier: ^16.5.0
         version: 16.5.0
+      hono:
+        specifier: ^4.10.3
+        version: 4.10.3
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
@@ -53,6 +56,9 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@24.7.2)(tsx@4.20.6)
+      ws:
+        specifier: ^8.18.3
+        version: 8.18.3
 
   packages/backend-local:
     dependencies:

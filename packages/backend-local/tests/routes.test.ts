@@ -4,6 +4,25 @@ import { createBackendApp } from "../src/app.js";
 import type { Command, CommandContext, GameId } from "../src/core.js";
 import { createCommandContextFactory, createTestContext } from "./support/testContext.js";
 
+function withActiveGameId<T extends object>(
+  testContext: ReturnType<typeof createTestContext>,
+  extra: T,
+): T & {
+  getActiveGameId: () => GameId;
+  setActiveGameId: (next: GameId) => void;
+  defaultConfig: (typeof testContext)["config"];
+} {
+  let activeGameId: GameId = "game-1";
+  return {
+    ...extra,
+    defaultConfig: testContext.config,
+    getActiveGameId: () => activeGameId,
+    setActiveGameId: (next: GameId) => {
+      activeGameId = next;
+    },
+  };
+}
+
 type DispatchCommand = (command: Command, context: CommandContext) => Promise<void>;
 
 afterEach(() => {
@@ -13,16 +32,11 @@ afterEach(() => {
 describe("backend-local HTTP routes", () => {
   it("reports health status", async () => {
     const testContext = createTestContext();
-    let activeGameId: GameId = "game-1";
     const app = createBackendApp({
       port: 4321,
       gameGateway: testContext.gameGateway,
       roundGateway: testContext.gateway,
-      defaultConfig: testContext.config,
-      getActiveGameId: () => activeGameId,
-      setActiveGameId: (next) => {
-        activeGameId = next;
-      },
+      ...withActiveGameId(testContext, {}),
       bus: testContext.bus,
       logger: testContext.logger,
       createContext: createCommandContextFactory(testContext),
@@ -51,16 +65,11 @@ describe("backend-local HTTP routes", () => {
     const dispatch: DispatchCommand = async (command, context) =>
       dispatchSpy(command, context);
 
-    let activeGameId: GameId = "game-1";
     const app = createBackendApp({
       port: 9999,
       gameGateway: testContext.gameGateway,
       roundGateway: testContext.gateway,
-      defaultConfig: testContext.config,
-      getActiveGameId: () => activeGameId,
-      setActiveGameId: (next) => {
-        activeGameId = next;
-      },
+      ...withActiveGameId(testContext, {}),
       bus: testContext.bus,
       logger: testContext.logger,
       createContext,
@@ -92,16 +101,11 @@ describe("backend-local HTTP routes", () => {
 
   it("returns 400 for invalid start payloads", async () => {
     const testContext = createTestContext();
-    let activeGameId: GameId = "game-1";
     const app = createBackendApp({
       port: 9999,
       gameGateway: testContext.gameGateway,
       roundGateway: testContext.gateway,
-      defaultConfig: testContext.config,
-      getActiveGameId: () => activeGameId,
-      setActiveGameId: (next) => {
-        activeGameId = next;
-      },
+      ...withActiveGameId(testContext, {}),
       bus: testContext.bus,
       logger: testContext.logger,
       createContext: createCommandContextFactory(testContext),

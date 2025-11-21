@@ -222,7 +222,8 @@ export function createTestContext(
     });
 
   const gameGateway = new FakeGameGateway();
-  void gameGateway.createGame("host", config);
+  // Seed a default game for tests; errors surface synchronously
+  gameGateway.createGameSync("host", config);
 
   const context: BackendTestContext = {
     gameGateway,
@@ -270,6 +271,10 @@ export class FakeGameGateway implements GameGateway {
   }
 
   async createGame(host: PlayerId, config: GameConfig): Promise<GameState> {
+    return this.createGameSync(host, config);
+  }
+
+  createGameSync(host: PlayerId, config: GameConfig): GameState {
     const id = `game-${this.#nextId++}` as GameId;
     const game: GameState = {
       id,

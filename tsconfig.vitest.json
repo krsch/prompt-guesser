@@ -11,6 +11,11 @@
     "moduleResolution": "Bundler",
     "rootDir": "."
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "packages/backend-local/src/**/*.ts",
+    "packages/backend-local/tests/**/*.ts"
+  ],
   "exclude": ["dist", "node_modules", "coverage"]
 }

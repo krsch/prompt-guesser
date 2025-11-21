@@ -6,7 +6,8 @@
     "outDir": "dist",
     "baseUrl": ".",
     "paths": {
-      "@prompt-guesser/core/*": ["src/*"]
+      "@prompt-guesser/core/*": ["src/*"],
+      "@prompt-guesser/core/*.js": ["src/*.ts"]
     },
 
     /* ---------- Module & Target ---------- */

@@ -3,9 +3,9 @@ import { createNodeWebSocket } from "@hono/node-ws";
 import type { Context } from "hono";
 import type { WSContext } from "hono/ws";
 import { existsSync } from "node:fs";
+import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AddressInfo } from "node:net";
 import type { WebSocket } from "ws";
 
 import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";

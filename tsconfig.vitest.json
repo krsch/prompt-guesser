@@ -4,9 +4,6 @@
     /* Testing environment */
     "types": ["vitest/globals", "node"],
 
-    /* Allow .ts extensions for workspace imports */
-    "allowImportingTsExtensions": true,
-
     /* Disable output */
     "noEmit": true,
 

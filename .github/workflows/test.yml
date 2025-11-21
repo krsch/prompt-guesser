@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --recursive --frozen-lockfile
 
+      - name: Debug tsconfig (tests)
+        run: pnpm exec tsc --showConfig -p tsconfig.vitest.json | head -n 200
+
       - name: Type check
         run: pnpm exec tsc --noEmit -p tsconfig.json
 

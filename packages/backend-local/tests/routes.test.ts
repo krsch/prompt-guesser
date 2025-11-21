@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBackendApp } from "../src/app.js";
-import type { Command, CommandContext } from "../src/core.js";
-import { StartNewRound } from "../src/core.js";
+import type { Command, CommandContext, GameId } from "../src/core.js";
 import { createCommandContextFactory, createTestContext } from "./support/testContext.js";
 
 type DispatchCommand = (command: Command, context: CommandContext) => Promise<void>;
@@ -14,9 +13,16 @@ afterEach(() => {
 describe("backend-local HTTP routes", () => {
   it("reports health status", async () => {
     const testContext = createTestContext();
+    let activeGameId: GameId = "game-1";
     const app = createBackendApp({
       port: 4321,
-      gateway: testContext.gateway,
+      gameGateway: testContext.gameGateway,
+      roundGateway: testContext.gateway,
+      defaultConfig: testContext.config,
+      getActiveGameId: () => activeGameId,
+      setActiveGameId: (next) => {
+        activeGameId = next;
+      },
       bus: testContext.bus,
       logger: testContext.logger,
       createContext: createCommandContextFactory(testContext),
@@ -40,15 +46,21 @@ describe("backend-local HTTP routes", () => {
     const createContext = createCommandContextFactory(testContext);
 
     const dispatchSpy = vi.fn(async (command: Command, context: CommandContext) => {
-      expect(command).toBeInstanceOf(StartNewRound);
       await command.execute(context);
     });
     const dispatch: DispatchCommand = async (command, context) =>
       dispatchSpy(command, context);
 
+    let activeGameId: GameId = "game-1";
     const app = createBackendApp({
       port: 9999,
-      gateway: testContext.gateway,
+      gameGateway: testContext.gameGateway,
+      roundGateway: testContext.gateway,
+      defaultConfig: testContext.config,
+      getActiveGameId: () => activeGameId,
+      setActiveGameId: (next) => {
+        activeGameId = next;
+      },
       bus: testContext.bus,
       logger: testContext.logger,
       createContext,
@@ -72,12 +84,7 @@ describe("backend-local HTTP routes", () => {
       promptDurationMs: testContext.config.promptDurationMs,
     });
 
-    expect(dispatchSpy).toHaveBeenCalledTimes(1);
-    expect(testContext.scheduler.scheduled).toContainEqual({
-      roundId: "round-1",
-      phase: "prompt",
-      delayMs: testContext.config.promptDurationMs,
-    });
+    expect(dispatchSpy).not.toHaveBeenCalled();
 
     const stored = await testContext.gateway.loadRoundState("round-1");
     expect(stored.players).toEqual(["alice", "bob"]);
@@ -85,9 +92,16 @@ describe("backend-local HTTP routes", () => {
 
   it("returns 400 for invalid start payloads", async () => {
     const testContext = createTestContext();
+    let activeGameId: GameId = "game-1";
     const app = createBackendApp({
       port: 9999,
-      gateway: testContext.gateway,
+      gameGateway: testContext.gameGateway,
+      roundGateway: testContext.gateway,
+      defaultConfig: testContext.config,
+      getActiveGameId: () => activeGameId,
+      setActiveGameId: (next) => {
+        activeGameId = next;
+      },
       bus: testContext.bus,
       logger: testContext.logger,
       createContext: createCommandContextFactory(testContext),
@@ -114,9 +128,16 @@ describe("backend-local HTTP routes", () => {
     const dispatch: DispatchCommand = async (command, context) =>
       dispatchSpy(command, context);
 
+    let activeGameId: GameId = "game-1";
     const app = createBackendApp({
       port: 9999,
-      gateway: testContext.gateway,
+      gameGateway: testContext.gameGateway,
+      roundGateway: testContext.gateway,
+      defaultConfig: testContext.config,
+      getActiveGameId: () => activeGameId,
+      setActiveGameId: (next) => {
+        activeGameId = next;
+      },
       bus: testContext.bus,
       logger: testContext.logger,
       createContext,

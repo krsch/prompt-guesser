@@ -2,13 +2,15 @@ import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
 import { RealScheduler } from "../src/adapters/RealScheduler.js";
 import {
-  GameConfig,
   PhaseTimeout,
   type CommandContext,
   type MessageBus,
+  type GameGateway,
   type RoundGateway,
   type Scheduler,
+  createGameConfig,
 } from "../src/core.js";
+import { FakeGameGateway, FakeRoundGateway } from "./support/testContext.js";
 
 describe("RealScheduler", () => {
   beforeEach(() => {
@@ -21,18 +23,29 @@ describe("RealScheduler", () => {
   });
 
   it("dispatches a PhaseTimeout with the expected parameters", async () => {
-    const context: CommandContext = {
-      gateway: {} as RoundGateway,
-      bus: { publish: vi.fn() } as MessageBus,
-      imageGenerator: { generate: vi.fn() },
-      scheduler: {} as Scheduler,
-      config: new GameConfig({
-        minPlayers: 1,
-        maxPlayers: 6,
+    const gameGateway: GameGateway = new FakeGameGateway();
+    const roundGateway: RoundGateway = new FakeRoundGateway();
+    const game = await gameGateway.createGame(
+      "alice",
+      createGameConfig({
         promptDurationMs: 1,
         guessingDurationMs: 1,
         votingDurationMs: 1,
       }),
+    );
+    const round = await roundGateway.startNewRound(
+      game.id,
+      ["alice", "bob"],
+      "alice",
+      Date.now(),
+    );
+
+    const context: CommandContext = {
+      gameGateway,
+      roundGateway,
+      bus: { publish: vi.fn() } as MessageBus,
+      imageGenerator: { generate: vi.fn() },
+      scheduler: {} as Scheduler,
     };
 
     const dispatch = vi.fn().mockResolvedValue(undefined);
@@ -44,6 +57,7 @@ describe("RealScheduler", () => {
     });
 
     await scheduler.scheduleTimeout("round-1", "prompt", 5000);
+    await roundGateway.saveRoundState({ ...round, id: "round-1" });
 
     expect(contextFactory).not.toHaveBeenCalled();
 

@@ -2,7 +2,14 @@ import { Hono } from "hono";
 import type { Context, Next } from "hono";
 
 import type { PublishedEvent } from "./adapters/WebSocketBus.js";
-import { StartNewRound, SubmitDecoy, SubmitPrompt, SubmitVote } from "./core.js";
+import {
+  SubmitDecoy,
+  SubmitPrompt,
+  SubmitVote,
+  type GameConfig,
+  type GameGateway,
+  type GameId,
+} from "./core.js";
 import type {
   Command,
   CommandContext,
@@ -23,8 +30,12 @@ export interface EventBus extends MessageBus {
 
 export interface CreateBackendAppOptions {
   readonly port: number;
-  readonly gateway: RoundGateway;
+  readonly gameGateway: GameGateway;
+  readonly roundGateway: RoundGateway;
   readonly bus: EventBus;
+  readonly defaultConfig: GameConfig;
+  readonly getActiveGameId: () => GameId;
+  readonly setActiveGameId: (gameId: GameId) => void;
   readonly logger: Logger;
   readonly createContext: () => CommandContext;
   readonly dispatch: DispatchCommand;
@@ -32,8 +43,12 @@ export interface CreateBackendAppOptions {
 
 export function createBackendApp({
   port,
-  gateway,
+  gameGateway,
+  roundGateway,
   bus,
+  defaultConfig,
+  getActiveGameId,
+  setActiveGameId,
   logger,
   createContext,
   dispatch,
@@ -74,26 +89,55 @@ export function createBackendApp({
 
     const now = Date.now();
     const context = createContext();
-    let command: StartNewRound;
-    try {
-      command = new StartNewRound(body.players, activePlayer, now);
-    } catch (error) {
-      return c.json({ error: getErrorMessage(error) }, 400);
-    }
+    let gameId = getActiveGameId();
 
-    const eventPromise = bus.waitFor(
-      ({ event }) =>
-        (event as { readonly type?: string; readonly at?: number }).type ===
-          "RoundStarted" && (event as { readonly at?: number }).at === now,
-      2000,
+    let gameState = await gameGateway
+      .loadGameState(gameId)
+      .catch(async () => gameGateway.createGame(activePlayer, defaultConfig));
+    gameId = gameState.id;
+    setActiveGameId(gameId);
+
+    gameState.players = [...body.players];
+    gameState.cumulativeScores = Object.fromEntries(
+      gameState.players.map((playerId) => [
+        playerId,
+        gameState.cumulativeScores[playerId] ?? 0,
+      ]),
+    );
+    gameState.activeRoundId = undefined;
+    gameState.phase = "active";
+    gameState.currentRoundIndex += 1;
+    await gameGateway.saveGameState(gameState);
+
+    const round = await roundGateway.startNewRound(
+      gameState.id,
+      gameState.players,
+      activePlayer,
+      now,
     );
 
+    gameState.activeRoundId = round.id;
+    await gameGateway.saveGameState(gameState);
+
+    const event = {
+      type: "RoundStarted" as const,
+      gameId,
+      roundId: round.id,
+      players: [...round.players],
+      activePlayer: round.activePlayer,
+      at: now,
+      promptDurationMs: gameState.config.promptDurationMs,
+    };
+
     try {
-      await dispatch(command, context);
-      const { event } = await eventPromise;
+      await context.scheduler.scheduleTimeout(
+        round.id,
+        "prompt",
+        gameState.config.promptDurationMs,
+      );
+      await bus.publish(`round:${round.id}`, event);
       return c.json(event);
     } catch (error) {
-      void eventPromise.catch(() => undefined);
       logger.error?.("Failed to start round", { error });
       return c.json({ error: getErrorMessage(error) }, 500);
     }
@@ -102,7 +146,7 @@ export function createBackendApp({
   app.get("/api/round/:id", async (c: Context) => {
     const roundId = c.req.param("id") as RoundId;
     try {
-      const state = await gateway.loadRoundState(roundId);
+      const state = await roundGateway.loadRoundState(roundId);
       return c.json(state);
     } catch (error) {
       logger.error?.("Failed to load round", { roundId, error });

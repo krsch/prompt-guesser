@@ -12,8 +12,13 @@ import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
 import { RealScheduler } from "./adapters/RealScheduler.js";
 import { WebSocketBus } from "./adapters/WebSocketBus.js";
 import { createBackendApp } from "./app.js";
-import { GameConfig, InMemoryRoundGateway, dispatchCommand } from "./core.js";
-import type { CommandContext, ImageGenerator, Logger } from "./core.js";
+import {
+  InMemoryGameGateway,
+  InMemoryRoundGateway,
+  createGameConfig,
+  dispatchCommand,
+} from "./core.js";
+import type { CommandContext, GameId, ImageGenerator, Logger } from "./core.js";
 import { createConsoleLogger } from "./logger.js";
 
 const DEFAULT_PORT = Number(process.env["PORT"] ?? 8787);
@@ -21,18 +26,21 @@ const OPENAI_API_KEY = process.env["OPENAI_API_KEY"] ?? "";
 
 export async function startServer(): Promise<void> {
   const logger = createConsoleLogger("backend-local");
-  const gateway = new InMemoryRoundGateway();
+  const roundGateway = new InMemoryRoundGateway();
+  const gameGateway = new InMemoryGameGateway();
   const bus = new WebSocketBus(logger);
-  const config = GameConfig.withDefaults();
+  const config = createGameConfig();
+  const game = await gameGateway.createGame("host", config);
+  let activeGameId: GameId = game.id;
   const imageGenerator = createImageGenerator(logger);
 
   let scheduler: RealScheduler;
 
   const createContext = (): CommandContext => ({
-    gateway,
+    gameGateway,
+    roundGateway,
     bus,
     imageGenerator,
-    config,
     scheduler,
     logger,
   });
@@ -44,8 +52,14 @@ export async function startServer(): Promise<void> {
 
   const app = createBackendApp({
     port: DEFAULT_PORT,
-    gateway,
+    gameGateway,
+    roundGateway,
     bus,
+    defaultConfig: config,
+    getActiveGameId: (): GameId => activeGameId,
+    setActiveGameId: (next: GameId): void => {
+      activeGameId = next;
+    },
     logger,
     createContext,
     dispatch: dispatchCommand,

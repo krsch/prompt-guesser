@@ -3,8 +3,12 @@ import { vi } from "vitest";
 import type { PublishedEvent } from "../../src/adapters/WebSocketBus.js";
 import type { EventBus } from "../../src/app.js";
 import {
-  GameConfig,
+  createGameConfig,
   type CommandContext,
+  type GameConfig,
+  type GameGateway,
+  type GameId,
+  type GameState,
   type ImageGenerator,
   type Logger,
   type PlayerId,
@@ -161,6 +165,7 @@ export class FakeRoundGateway implements RoundGateway {
   }
 
   async startNewRound(
+    gameId: GameId,
     players: readonly PlayerId[],
     activePlayer: PlayerId,
     startedAt: TimePoint,
@@ -168,6 +173,7 @@ export class FakeRoundGateway implements RoundGateway {
     const id = `round-${this.#nextId++}` as RoundId;
     const state: ValidRoundState = {
       id,
+      gameId,
       players: [...players],
       activePlayer,
       phase: "prompt",
@@ -190,6 +196,7 @@ export function createLoggerMock(): Logger {
 }
 
 export interface BackendTestContext {
+  readonly gameGateway: FakeGameGateway;
   readonly gateway: FakeRoundGateway;
   readonly bus: FakeBus;
   readonly scheduler: FakeScheduler;
@@ -206,20 +213,24 @@ export interface TestContextOverrides {
 export function createTestContext(
   overrides: TestContextOverrides = {},
 ): BackendTestContext {
+  const config =
+    overrides.config ??
+    createGameConfig({
+      promptDurationMs: 10_000,
+      guessingDurationMs: 20_000,
+      votingDurationMs: 30_000,
+    });
+
+  const gameGateway = new FakeGameGateway();
+  void gameGateway.createGame("host", config);
+
   const context: BackendTestContext = {
+    gameGateway,
     gateway: new FakeRoundGateway(),
     bus: new FakeBus(),
     scheduler: new FakeScheduler(),
     imageGenerator: new FakeImageGenerator(),
-    config:
-      overrides.config ??
-      new GameConfig({
-        minPlayers: 1,
-        maxPlayers: 6,
-        promptDurationMs: 10_000,
-        guessingDurationMs: 20_000,
-        votingDurationMs: 30_000,
-      }),
+    config,
     logger: overrides.logger ?? createLoggerMock(),
   };
 
@@ -230,11 +241,51 @@ export function createCommandContextFactory(
   context: BackendTestContext,
 ): () => CommandContext {
   return (): CommandContext => ({
-    gateway: context.gateway,
+    gameGateway: context.gameGateway,
+    roundGateway: context.gateway,
     bus: context.bus,
     imageGenerator: context.imageGenerator,
     scheduler: context.scheduler,
-    config: context.config,
     logger: context.logger,
   });
+}
+
+export class FakeGameGateway implements GameGateway {
+  readonly games = new Map<GameId, GameState>();
+  #nextId = 1;
+
+  async loadGameState(gameId: GameId): Promise<GameState> {
+    const state = this.games.get(gameId);
+    if (!state) {
+      throw new Error(`Game ${gameId} not found`);
+    }
+    return this.#clone(state);
+  }
+
+  async saveGameState(state: GameState): Promise<void> {
+    if (!this.games.has(state.id)) {
+      throw new Error(`Game ${state.id} not found`);
+    }
+    this.games.set(state.id, this.#clone(state));
+  }
+
+  async createGame(host: PlayerId, config: GameConfig): Promise<GameState> {
+    const id = `game-${this.#nextId++}` as GameId;
+    const game: GameState = {
+      id,
+      players: [host],
+      host,
+      activeRoundId: undefined,
+      currentRoundIndex: 0,
+      cumulativeScores: { [host]: 0 },
+      config: { ...config },
+      phase: "lobby",
+    };
+    this.games.set(id, this.#clone(game));
+    return this.#clone(game);
+  }
+
+  #clone(state: GameState): GameState {
+    return JSON.parse(JSON.stringify(state)) as GameState;
+  }
 }

@@ -1,8 +1,12 @@
 import { serve } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
+import type { Context } from "hono";
+import type { WSContext } from "hono/ws";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { AddressInfo } from "node:net";
+import type { WebSocket } from "ws";
 
 import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
 import { RealScheduler } from "./adapters/RealScheduler.js";
@@ -51,10 +55,10 @@ export async function startServer(): Promise<void> {
 
   app.get(
     "/ws/:roundId",
-    upgradeWebSocket((c) => {
+    upgradeWebSocket((c: Context) => {
       const roundId = c.req.param("roundId");
       return {
-        onOpen(_event, ws): void {
+        onOpen(_event: Event, ws: WSContext<WebSocket>): void {
           const rawSocket = ws.raw;
           if (!rawSocket) {
             logger.warn("WebSocket connection missing raw handle", { roundId });
@@ -68,7 +72,7 @@ export async function startServer(): Promise<void> {
 
   const frontendPath = resolveFrontendPath();
   if (frontendPath) {
-    app.get("/*", async (c): Promise<Response> => {
+    app.get("/*", async (c: Context): Promise<Response> => {
       const filePath = join(frontendPath, "index.html");
       if (!existsSync(filePath)) {
         return c.json({ error: "Frontend build not found" }, 404);
@@ -80,7 +84,7 @@ export async function startServer(): Promise<void> {
     });
   }
 
-  const server = serve({ fetch: app.fetch, port: DEFAULT_PORT }, (info) => {
+  const server = serve({ fetch: app.fetch, port: DEFAULT_PORT }, (info: AddressInfo) => {
     logger.info("Server listening", info);
   });
 

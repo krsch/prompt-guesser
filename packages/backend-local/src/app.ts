@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context, Next } from "hono";
 
 import type { PublishedEvent } from "./adapters/WebSocketBus.js";
 import { StartNewRound, SubmitDecoy, SubmitPrompt, SubmitVote } from "./core.js";
@@ -39,7 +40,7 @@ export function createBackendApp({
 }: CreateBackendAppOptions): Hono {
   const app = new Hono();
 
-  app.use("/api/*", async (c, next): Promise<Response> => {
+  app.use("/api/*", async (c: Context, next: Next): Promise<Response> => {
     c.header("Access-Control-Allow-Origin", "*");
     c.header("Access-Control-Allow-Headers", "Content-Type");
     c.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -50,11 +51,11 @@ export function createBackendApp({
     return c.res;
   });
 
-  app.get("/api/health", (c) =>
+  app.get("/api/health", (c: Context) =>
     c.json({ ok: true, timestamp: Date.now(), config: { port } }),
   );
 
-  app.post("/api/round/start", async (c) => {
+  app.post("/api/round/start", async (c: Context) => {
     const body = await c.req
       .json<{
         readonly players: readonly string[];
@@ -98,7 +99,7 @@ export function createBackendApp({
     }
   });
 
-  app.get("/api/round/:id", async (c) => {
+  app.get("/api/round/:id", async (c: Context) => {
     const roundId = c.req.param("id") as RoundId;
     try {
       const state = await gateway.loadRoundState(roundId);
@@ -109,7 +110,7 @@ export function createBackendApp({
     }
   });
 
-  app.post("/api/round/:id/prompt", async (c) => {
+  app.post("/api/round/:id/prompt", async (c: Context) => {
     const roundId = c.req.param("id") as RoundId;
     const body = await c.req
       .json<{
@@ -133,7 +134,7 @@ export function createBackendApp({
     }
   });
 
-  app.post("/api/round/:id/decoy", async (c) => {
+  app.post("/api/round/:id/decoy", async (c: Context) => {
     const roundId = c.req.param("id") as RoundId;
     const body = await c.req
       .json<{
@@ -157,7 +158,7 @@ export function createBackendApp({
     }
   });
 
-  app.post("/api/round/:id/vote", async (c) => {
+  app.post("/api/round/:id/vote", async (c: Context) => {
     const roundId = c.req.param("id") as RoundId;
     const body = await c.req
       .json<{

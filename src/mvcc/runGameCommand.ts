@@ -1,6 +1,7 @@
 import type { GameStore } from "./GameStore.js";
 import type { GameReactor, GameReactorContext } from "./reactors.js";
 import type { GameCommand, GameId } from "./types.js";
+import { assertValidGameState } from "./validators.js";
 
 export async function runGameCommand(
   gameId: GameId,
@@ -9,7 +10,16 @@ export async function runGameCommand(
   reactors: readonly GameReactor[],
   reactorCtx: GameReactorContext,
 ): Promise<Error | undefined> {
-  const result = await store.updateGame(gameId, (state) => cmd.apply(state));
+  const result = await store.updateGame(gameId, (state) => {
+    assertValidGameState(state);
+    const commandResult = cmd.apply(state);
+
+    if (commandResult.kind === "ok" || commandResult.kind === "failedRound") {
+      assertValidGameState(commandResult.state);
+    }
+
+    return commandResult;
+  });
 
   if (result.kind === "rejected") {
     return result.error;

@@ -18,7 +18,7 @@ describe("InMemoryGameStore", () => {
   it("creates initial state via factory and returns change for ok result", async () => {
     const store = new InMemoryGameStore();
     const initial = makeGameState({ id: "game-new" as GameId });
-    store.seed(initial);
+    await store.createGame(initial);
 
     const command: GameCommand = {
       type: "Noop",
@@ -42,7 +42,7 @@ describe("InMemoryGameStore", () => {
     const initial = makeGameState();
     const error = new CommandError("rejected");
 
-    store.seed(initial);
+    await store.createGame(initial);
 
     const result = await store.updateGame(initial.id, () => ({
       kind: "rejected",
@@ -68,7 +68,7 @@ describe("InMemoryGameStore", () => {
     const initial = makeGameState();
     const error = new StateFailureError("round failed");
 
-    store.seed(initial);
+    await store.createGame(initial);
 
     const currentRound = initial.currentRound;
     if (!currentRound) {
@@ -113,6 +113,9 @@ describe("runGameCommand", () => {
 
     const error = new CommandError("nope");
     const store: GameStore = {
+      createGame: async () => {
+        /* noop for test */
+      },
       updateGame: vi.fn(async (_id, applyFn) => {
         applyFn(makeGameState());
         return { kind: "rejected" as const, error };
@@ -139,7 +142,7 @@ describe("runGameCommand", () => {
   it("dispatches reactors for ok results", async () => {
     const store = new InMemoryGameStore();
     const initial = makeGameState();
-    store.seed(initial);
+    await store.createGame(initial);
 
     const nextState: GameState = {
       ...initial,
@@ -186,6 +189,9 @@ describe("runGameCommand", () => {
     };
 
     const store: GameStore = {
+      createGame: async () => {
+        /* noop for test */
+      },
       updateGame: vi.fn(async (_id, applyFn) => {
         applyFn(initial);
         return storeResult;

@@ -16,6 +16,7 @@ export type GameStoreUpdateResult =
   | { readonly kind: "rejected"; readonly error: CommandError };
 
 export interface GameStore {
+  createGame(state: GameState): Promise<void>;
   updateGame(
     gameId: GameId,
     applyFn: (state: GameState) => CommandResult,

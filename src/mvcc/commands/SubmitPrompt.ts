@@ -41,13 +41,13 @@ export class SubmitPrompt implements GameCommand {
     const prompts = round.prompts ?? {};
     const existing = prompts[this.playerId];
     if (existing !== undefined) {
-      if (existing === this.prompt) {
-        return { kind: "ok", state };
+      if (existing !== this.prompt) {
+        return {
+          kind: "rejected",
+          error: new CommandError("Prompt already submitted with different content"),
+        };
       }
-      return {
-        kind: "rejected",
-        error: new CommandError("Prompt already submitted with different content"),
-      };
+      return { kind: "ok", state };
     }
 
     const nextRound = {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createGameConfig } from "../src/domain/GameConfig.js";
 import { PhaseTimeout } from "../src/mvcc/commands/PhaseTimeout.js";
+import { SetRoundImage } from "../src/mvcc/commands/SetRoundImage.js";
 import { StartNextRound } from "../src/mvcc/commands/StartNextRound.js";
 import { SubmitDecoy } from "../src/mvcc/commands/SubmitDecoy.js";
 import { SubmitPrompt } from "../src/mvcc/commands/SubmitPrompt.js";
@@ -59,6 +60,20 @@ describe("SubmitPrompt (pure)", () => {
 
     expect(res.state.currentRound?.state.prompts).toEqual({ p1: "real prompt" });
     expect(res.state.currentRound?.state.phase).toBe("prompt");
+  });
+});
+
+describe("SetRoundImage (pure)", () => {
+  it("moves to guessing once image is set", () => {
+    const round = makeRoundState({ phase: "prompt", prompts: { p1: "real" } });
+    const state = makeGameState({ currentRound: { id: round.id, state: round } });
+    const cmd = new SetRoundImage(round.id, "https://img");
+
+    const res = cmd.apply(state);
+    if (res.kind !== "ok") throw new Error("expected ok");
+
+    expect(res.state.currentRound?.state.phase).toBe("guessing");
+    expect(res.state.currentRound?.state.imageUrl).toBe("https://img");
   });
 });
 

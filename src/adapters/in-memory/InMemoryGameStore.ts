@@ -7,7 +7,7 @@ import type { CommandResult, GameId, GameState } from "../../mvcc/types.js";
 export class InMemoryGameStore implements GameStore {
   #games = new Map<GameId, GameState>();
 
-  seed(state: GameState): void {
+  async createGame(state: GameState): Promise<void> {
     this.#games.set(state.id, this.#clone(state));
   }
 

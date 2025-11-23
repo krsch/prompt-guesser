@@ -1,6 +1,7 @@
 /* eslint-disable functional/immutable-data */
 /* eslint-disable functional/prefer-readonly-type */
 import { PhaseTimeout } from "../../domain/commands/PhaseTimeout.js";
+import type { GameId } from "../../domain/ports/GameGateway.js";
 import type { Scheduler } from "../../domain/ports/Scheduler.js";
 import type { RoundId, TimePoint } from "../../domain/typedefs.js";
 
@@ -12,11 +13,11 @@ import type { RoundId, TimePoint } from "../../domain/typedefs.js";
  * for tests to control timer progression without depending on real time or fake timers.
  */
 export class InMemoryScheduler implements Scheduler {
-  #dispatch: (command: PhaseTimeout) => Promise<void> | void;
+  #dispatch: (command: PhaseTimeout, gameId: GameId) => Promise<void> | void;
   #now: TimePoint = 0;
-  #queue: PhaseTimeout[] = [];
+  #queue: Array<{ readonly command: PhaseTimeout; readonly gameId: GameId }> = [];
 
-  constructor(dispatch: (command: PhaseTimeout) => Promise<void> | void) {
+  constructor(dispatch: (command: PhaseTimeout, gameId: GameId) => Promise<void> | void) {
     this.#dispatch = dispatch;
   }
 
@@ -24,6 +25,7 @@ export class InMemoryScheduler implements Scheduler {
     roundId: RoundId,
     phase: PhaseTimeout["phase"],
     delayMs: number,
+    gameId: GameId,
   ): Promise<void> {
     if (delayMs < 0) {
       throw new Error("Timeout delay must be non-negative");
@@ -31,8 +33,8 @@ export class InMemoryScheduler implements Scheduler {
 
     const fireAt = this.#now + delayMs;
     const command = new PhaseTimeout(roundId, phase, fireAt);
-    this.#queue.push(command);
-    this.#queue.sort((left, right) => left.at - right.at);
+    this.#queue.push({ command, gameId });
+    this.#queue.sort((left, right) => left.command.at - right.command.at);
   }
 
   async runFor(milliseconds: number): Promise<void> {
@@ -44,16 +46,12 @@ export class InMemoryScheduler implements Scheduler {
 
     while (this.#queue.length > 0) {
       const next = this.#queue[0];
-      if (!next) {
-        break;
-      }
-      if (next.at > targetTime) {
-        break;
-      }
+      if (!next) break;
+      if (next.command.at > targetTime) break;
 
       this.#queue.shift();
-      this.#now = next.at;
-      await this.#dispatch(next);
+      this.#now = next.command.at;
+      await this.#dispatch(next.command, next.gameId);
     }
 
     this.#now = targetTime;

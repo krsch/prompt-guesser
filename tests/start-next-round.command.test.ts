@@ -60,6 +60,7 @@ describe("StartNextRound command", () => {
       "round-1",
       "prompt",
       gameState.config.promptDurationMs,
+      GAME_ID,
     );
     expect(bus.publish).toHaveBeenCalledWith(`round:round-1`, {
       type: "RoundStarted",

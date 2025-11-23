@@ -76,6 +76,7 @@ describe("SubmitPrompt command", () => {
       round.id,
       "guessing",
       config.guessingDurationMs,
+      round.gameId,
     );
   });
 

@@ -41,7 +41,12 @@ export class StartNextRound extends Command {
 
     await gameGateway.saveGameState(game);
 
-    await scheduler.scheduleTimeout(round.id, "prompt", game.config.promptDurationMs);
+    await scheduler.scheduleTimeout(
+      round.id,
+      "prompt",
+      game.config.promptDurationMs,
+      game.id,
+    );
 
     logger?.info?.("Round started", {
       type: this.type,

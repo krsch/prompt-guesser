@@ -6,11 +6,11 @@ import type { PhaseTimeout } from "../src/domain/commands/PhaseTimeout";
 describe("InMemoryScheduler", () => {
   it("dispatches commands once their delay elapses", async () => {
     const dispatched: PhaseTimeout[] = [];
-    const scheduler = new InMemoryScheduler((command) => {
+    const scheduler = new InMemoryScheduler((command, _gameId) => {
       dispatched.push(command);
     });
 
-    await scheduler.scheduleTimeout("round-1", "prompt", 2_000);
+    await scheduler.scheduleTimeout("round-1", "prompt", 2_000, "game-1");
 
     await scheduler.runFor(1_000);
     expect(dispatched).toEqual([]);
@@ -24,12 +24,12 @@ describe("InMemoryScheduler", () => {
 
   it("delivers timeouts in the order they are scheduled to fire", async () => {
     const dispatched: PhaseTimeout[] = [];
-    const scheduler = new InMemoryScheduler((command) => {
+    const scheduler = new InMemoryScheduler((command, _gameId) => {
       dispatched.push(command);
     });
 
-    await scheduler.scheduleTimeout("round-1", "guessing", 500);
-    await scheduler.scheduleTimeout("round-1", "guessing", 1_500);
+    await scheduler.scheduleTimeout("round-1", "guessing", 500, "game-1");
+    await scheduler.scheduleTimeout("round-1", "guessing", 1_500, "game-1");
 
     await scheduler.runFor(1_500);
     expect(dispatched).toHaveLength(2);
@@ -38,12 +38,12 @@ describe("InMemoryScheduler", () => {
 
   it("processes follow-up timeouts scheduled during dispatch", async () => {
     const dispatched: string[] = [];
-    const scheduler = new InMemoryScheduler(async (command) => {
+    const scheduler = new InMemoryScheduler(async (command, _gameId) => {
       dispatched.push(`${command.phase}-${command.at}`);
-      await scheduler.scheduleTimeout("round-1", command.phase, 500);
+      await scheduler.scheduleTimeout("round-1", command.phase, 500, "game-1");
     });
 
-    await scheduler.scheduleTimeout("round-1", "voting", 1_000);
+    await scheduler.scheduleTimeout("round-1", "voting", 1_000, "game-1");
 
     await scheduler.runFor(2_000);
     expect(dispatched).toEqual(["voting-1000", "voting-1500", "voting-2000"]);

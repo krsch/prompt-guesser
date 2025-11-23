@@ -4,7 +4,7 @@ import { InMemoryGameStore } from "../src/adapters/in-memory/InMemoryGameStore.j
 import { createGameConfig } from "../src/domain/GameConfig.js";
 import { CommandError } from "../src/mvcc/errors.js";
 import { GameService } from "../src/mvcc/GameService.js";
-import type { GameReactor, GameReactorContext } from "../src/mvcc/reactors.js";
+import type { GameReactor, GameReactorContextBase } from "../src/mvcc/reactors.js";
 import type { GameCommand, GameId, GameState } from "../src/mvcc/types.js";
 
 describe("GameService", () => {
@@ -32,7 +32,12 @@ describe("GameService", () => {
     expect(reactor.handle).toHaveBeenCalledTimes(1);
     expect(reactor.handle).toHaveBeenCalledWith(
       { before: initial, after: nextState },
-      ctx,
+      expect.objectContaining({
+        bus: ctx.bus,
+        scheduler: ctx.scheduler,
+        logger: ctx.logger,
+        service: expect.any(Object),
+      }),
       "ok",
     );
   });
@@ -56,7 +61,7 @@ describe("GameService", () => {
   });
 });
 
-function makeReactorContext(): GameReactorContext {
+function makeReactorContext(): GameReactorContextBase {
   return {
     bus: { publish: async (): Promise<void> => {} },
     scheduler: {

@@ -89,6 +89,7 @@ describe("PhaseTimeout command", () => {
       round.id,
       "voting",
       config.votingDurationMs,
+      round.gameId,
     );
   });
 

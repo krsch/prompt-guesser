@@ -14,11 +14,12 @@ import { createBackendApp } from "./app.js";
 import {
   BroadcastReactor,
   GameService,
+  ImageGenerationReactor,
   InMemoryGameStore,
+  PhaseSchedulerReactor,
   createGameConfig,
 } from "./core.js";
-import type { PhaseTimeout } from "./core.js";
-import type { GameId } from "./core.js";
+import type { GameId, PhaseTimeout } from "./core.js";
 import { createConsoleLogger } from "./logger.js";
 
 const DEFAULT_PORT = Number(process.env["PORT"] ?? 8787);
@@ -36,18 +37,32 @@ export async function startServer(): Promise<void> {
     },
   };
   await gameStore.createGame(initialGame);
-  let activeGameId: GameId = initialGame.id;
 
   let service: GameService;
   const scheduler = new RealScheduler({
-    runTimeout: async (cmd: PhaseTimeout): Promise<void> =>
-      service.run(activeGameId, cmd),
+    runTimeout: async (cmd: PhaseTimeout, gameId: GameId): Promise<void> => {
+      await service.run(gameId, cmd);
+    },
     logger,
   });
+
+  const reactorContext = { bus, scheduler, logger };
+
+  const reactors = [
+    new BroadcastReactor(),
+    new PhaseSchedulerReactor(),
+    new ImageGenerationReactor({
+      async generate(prompt: string): Promise<string> {
+        const encoded = encodeURIComponent(prompt);
+        return `https://dummyimage.com/1024x1024/1f2937/ffffff&text=${encoded}`;
+      },
+    }),
+  ];
+
   service = new GameService({
     store: gameStore,
-    reactors: [new BroadcastReactor()],
-    reactorContext: { bus, scheduler, logger },
+    reactors,
+    reactorContext,
   });
 
   const app = createBackendApp({

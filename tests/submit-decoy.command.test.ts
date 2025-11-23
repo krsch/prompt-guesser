@@ -99,6 +99,7 @@ describe("SubmitDecoy command", () => {
       round.id,
       "voting",
       config.votingDurationMs,
+      round.gameId,
     );
   });
 

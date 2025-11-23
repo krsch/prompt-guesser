@@ -62,10 +62,16 @@ export class FakeScheduler implements Scheduler {
     readonly roundId: RoundId;
     readonly phase: string;
     readonly delayMs: number;
+    readonly gameId: GameId;
   }> = [];
 
-  async scheduleTimeout(roundId: RoundId, phase: string, delayMs: number): Promise<void> {
-    this.scheduled.push({ roundId, phase, delayMs });
+  async scheduleTimeout(
+    roundId: RoundId,
+    phase: string,
+    delayMs: number,
+    gameId: GameId,
+  ): Promise<void> {
+    this.scheduled.push({ roundId, phase, delayMs, gameId });
   }
 }
 

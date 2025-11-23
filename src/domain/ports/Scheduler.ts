@@ -1,3 +1,4 @@
+import type { GameId } from "./GameGateway.js";
 import type { PhaseTimeout } from "../commands/PhaseTimeout.js";
 import type { RoundId } from "../typedefs.js";
 
@@ -13,5 +14,6 @@ export interface Scheduler {
     roundId: RoundId,
     phase: PhaseTimeout["phase"],
     delayMs: number,
+    gameId: GameId,
   ): Promise<void>;
 }

@@ -20,15 +20,16 @@ describe("RealScheduler", () => {
       runTimeout,
     });
 
-    await scheduler.scheduleTimeout("round-1", "prompt", 5000);
+    await scheduler.scheduleTimeout("round-1", "prompt", 5000, "game-1");
 
     await vi.runOnlyPendingTimersAsync();
 
     expect(runTimeout).toHaveBeenCalledTimes(1);
 
-    const [command] = runTimeout.mock.calls[0] ?? [];
+    const [command, gameId] = runTimeout.mock.calls[0] ?? [];
     expect(command).toBeInstanceOf(PhaseTimeout);
     expect((command as PhaseTimeout).roundId).toBe("round-1");
     expect((command as PhaseTimeout).phase).toBe("prompt");
+    expect(gameId).toBe("game-1");
   });
 });

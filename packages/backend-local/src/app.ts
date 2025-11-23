@@ -220,7 +220,12 @@ export function createBackendApp({
 
       await service.run(gameId, new SetLobbyPlayers(players));
       await service.run(gameId, new StartNextRound(roundId, activePlayer, seed, now));
-      await scheduler.scheduleTimeout(roundId, "prompt", defaultConfig.promptDurationMs);
+      await scheduler.scheduleTimeout(
+        roundId,
+        "prompt",
+        defaultConfig.promptDurationMs,
+        gameId,
+      );
       const visible = projectVisibleState(await gameStore.loadGame(gameId));
       return c.newResponse(JSON.stringify(visible), {
         status: 201,

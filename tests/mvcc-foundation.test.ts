@@ -257,6 +257,7 @@ function makeReactorContext(
     bus: { publish: vi.fn(async () => {}) },
     scheduler: { scheduleTimeout: vi.fn(async () => {}) },
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    service: { run: vi.fn(async () => {}) },
   };
 
   return { ...base, ...overrides };

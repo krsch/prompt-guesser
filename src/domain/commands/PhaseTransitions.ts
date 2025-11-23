@@ -21,7 +21,12 @@ export async function transitionToGuessing(
 
   await roundGateway.saveRoundState(state);
 
-  await scheduler.scheduleTimeout(state.id, "guessing", config.guessingDurationMs);
+  await scheduler.scheduleTimeout(
+    state.id,
+    "guessing",
+    config.guessingDurationMs,
+    state.gameId,
+  );
 
   logger?.info?.("Round entering guessing phase", {
     roundId: state.id,
@@ -52,7 +57,12 @@ export async function transitionToVoting(
 
   const shuffledPrompts = getShuffledPrompts(state);
 
-  await scheduler.scheduleTimeout(state.id, "voting", config.votingDurationMs);
+  await scheduler.scheduleTimeout(
+    state.id,
+    "voting",
+    config.votingDurationMs,
+    state.gameId,
+  );
 
   await bus.publish(`round:${state.id}`, {
     type: "PromptsReady",

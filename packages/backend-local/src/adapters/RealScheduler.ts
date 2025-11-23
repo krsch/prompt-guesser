@@ -1,10 +1,10 @@
 /* eslint-disable functional/immutable-data */
 /* eslint-disable functional/prefer-readonly-type */
-import type { Logger, RoundId, Scheduler } from "../core.js";
+import type { GameId, Logger, RoundId, Scheduler } from "../core.js";
 import { PhaseTimeout } from "../core.js";
 
 interface RealSchedulerOptions {
-  readonly runTimeout: (cmd: PhaseTimeout) => Promise<void>;
+  readonly runTimeout: (cmd: PhaseTimeout, gameId: GameId) => Promise<void>;
   readonly logger?: Logger;
 }
 
@@ -24,6 +24,7 @@ export class RealScheduler implements Scheduler {
     roundId: RoundId,
     phase: PhaseTimeout["phase"],
     delayMs: number,
+    gameId: GameId,
   ): Promise<void> {
     if (delayMs < 0) {
       throw new Error("Timeout delay must be non-negative");
@@ -40,7 +41,7 @@ export class RealScheduler implements Scheduler {
     const timer = setTimeout(async () => {
       this.#timers.delete(key);
       try {
-        await this.#runTimeout(new PhaseTimeout(roundId, phase));
+        await this.#runTimeout(new PhaseTimeout(roundId, phase), gameId);
       } catch (error) {
         this.#logger?.error?.("Failed to dispatch scheduled timeout", {
           roundId,

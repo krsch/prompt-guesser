@@ -63,7 +63,7 @@ describe("Integration: play a full round", () => {
     };
 
     const scheduler: Scheduler = {
-      async scheduleTimeout(_roundId, _phase, _delayMs) {
+      async scheduleTimeout(_roundId, _phase, _delayMs, _gameId) {
         // Integration test advances phases explicitly by running commands; scheduled timeouts are
         // dispatched manually when needed.
       },

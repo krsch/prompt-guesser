@@ -113,6 +113,7 @@ describe("runGameCommand", () => {
 
     const error = new CommandError("nope");
     const store: GameStore = {
+      loadGame: async () => makeGameState(),
       createGame: async () => {
         /* noop for test */
       },
@@ -189,6 +190,7 @@ describe("runGameCommand", () => {
     };
 
     const store: GameStore = {
+      loadGame: async () => initial,
       createGame: async () => {
         /* noop for test */
       },

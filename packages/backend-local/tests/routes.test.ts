@@ -1,46 +1,25 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createBackendApp } from "../src/app.js";
-import type { Command, CommandContext, GameId } from "../src/core.js";
-import { createCommandContextFactory, createTestContext } from "./support/testContext.js";
-
-function withActiveGameId<T extends object>(
-  testContext: ReturnType<typeof createTestContext>,
-  extra: T,
-): T & {
-  getActiveGameId: () => GameId;
-  setActiveGameId: (next: GameId) => void;
-  defaultConfig: (typeof testContext)["config"];
-} {
-  let activeGameId: GameId = "game-1";
-  return {
-    ...extra,
-    defaultConfig: testContext.config,
-    getActiveGameId: () => activeGameId,
-    setActiveGameId: (next: GameId) => {
-      activeGameId = next;
-    },
-  };
-}
-
-type DispatchCommand = (command: Command, context: CommandContext) => Promise<void>;
-
-afterEach(() => {
-  vi.useRealTimers();
-});
+import type { GameId } from "../src/core.js";
+import { createTestContext } from "./support/testContext.js";
 
 describe("backend-local HTTP routes", () => {
   it("reports health status", async () => {
     const testContext = createTestContext();
+    let activeGameId: GameId = testContext.gameId;
     const app = createBackendApp({
       port: 4321,
-      gameGateway: testContext.gameGateway,
-      roundGateway: testContext.gateway,
-      ...withActiveGameId(testContext, {}),
+      gameStore: testContext.gameStore,
       bus: testContext.bus,
       logger: testContext.logger,
-      createContext: createCommandContextFactory(testContext),
-      dispatch: vi.fn(),
+      defaultConfig: testContext.config,
+      getActiveGameId: () => activeGameId,
+      setActiveGameId: (next) => {
+        activeGameId = next;
+      },
+      service: testContext.service,
+      scheduler: testContext.scheduler,
     });
 
     const response = await app.request("/api/health");
@@ -57,59 +36,60 @@ describe("backend-local HTTP routes", () => {
     vi.setSystemTime(now);
 
     const testContext = createTestContext();
-    const createContext = createCommandContextFactory(testContext);
-
-    const dispatchSpy = vi.fn(async (command: Command, context: CommandContext) => {
-      await command.execute(context);
-    });
-    const dispatch: DispatchCommand = async (command, context) =>
-      dispatchSpy(command, context);
+    let activeGameId: GameId = testContext.gameId;
 
     const app = createBackendApp({
       port: 9999,
-      gameGateway: testContext.gameGateway,
-      roundGateway: testContext.gateway,
-      ...withActiveGameId(testContext, {}),
+      gameStore: testContext.gameStore,
       bus: testContext.bus,
       logger: testContext.logger,
-      createContext,
-      dispatch,
+      defaultConfig: testContext.config,
+      getActiveGameId: () => activeGameId,
+      setActiveGameId: (next) => {
+        activeGameId = next;
+      },
+      service: testContext.service,
+      scheduler: testContext.scheduler,
     });
 
     const response = await app.request("/api/round/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ players: ["alice", "bob"], activePlayer: "alice" }),
+      body: JSON.stringify({ players: ["alice", "bob", "carol"], activePlayer: "alice" }),
     });
 
     expect(response.status).toBe(200);
-    const event = (await response.json()) as Record<string, unknown>;
-    expect(event).toMatchObject({
-      type: "RoundStarted",
-      roundId: "round-1",
-      players: ["alice", "bob"],
-      activePlayer: "alice",
-      at: now.getTime(),
-      promptDurationMs: testContext.config.promptDurationMs,
+    const visible = (await response.json()) as {
+      currentRound?: { id: string; state: { players: string[] } };
+    };
+    expect(visible.currentRound?.state.players).toEqual([
+      "host",
+      "alice",
+      "bob",
+      "carol",
+    ]);
+    expect(testContext.scheduler.scheduled[0]).toMatchObject({
+      roundId: visible.currentRound?.id,
+      phase: "prompt",
+      delayMs: testContext.config.promptDurationMs,
     });
-
-    expect(dispatchSpy).not.toHaveBeenCalled();
-
-    const stored = await testContext.gateway.loadRoundState("round-1");
-    expect(stored.players).toEqual(["alice", "bob"]);
   });
 
   it("returns 400 for invalid start payloads", async () => {
     const testContext = createTestContext();
+    let activeGameId: GameId = testContext.gameId;
     const app = createBackendApp({
       port: 9999,
-      gameGateway: testContext.gameGateway,
-      roundGateway: testContext.gateway,
-      ...withActiveGameId(testContext, {}),
+      gameStore: testContext.gameStore,
       bus: testContext.bus,
       logger: testContext.logger,
-      createContext: createCommandContextFactory(testContext),
-      dispatch: vi.fn(),
+      defaultConfig: testContext.config,
+      getActiveGameId: () => activeGameId,
+      setActiveGameId: (next) => {
+        activeGameId = next;
+      },
+      service: testContext.service,
+      scheduler: testContext.scheduler,
     });
 
     const response = await app.request("/api/round/start", {
@@ -125,18 +105,9 @@ describe("backend-local HTTP routes", () => {
 
   it("loads a round snapshot", async () => {
     const testContext = createTestContext();
-    const createContext = createCommandContextFactory(testContext);
-    const dispatchSpy = vi.fn(async (command: Command, context: CommandContext) => {
-      await command.execute(context);
-    });
-    const dispatch: DispatchCommand = async (command, context) =>
-      dispatchSpy(command, context);
-
-    let activeGameId: GameId = "game-1";
+    let activeGameId: GameId = testContext.gameId;
     const app = createBackendApp({
       port: 9999,
-      gameGateway: testContext.gameGateway,
-      roundGateway: testContext.gateway,
       defaultConfig: testContext.config,
       getActiveGameId: () => activeGameId,
       setActiveGameId: (next) => {
@@ -144,24 +115,24 @@ describe("backend-local HTTP routes", () => {
       },
       bus: testContext.bus,
       logger: testContext.logger,
-      createContext,
-      dispatch,
+      gameStore: testContext.gameStore,
+      service: testContext.service,
+      scheduler: testContext.scheduler,
     });
 
-    await app.request("/api/round/start", {
+    const startResponse = await app.request("/api/round/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ players: ["carol", "dave"], activePlayer: "carol" }),
+      body: JSON.stringify({ players: ["carol", "dave", "erin"], activePlayer: "carol" }),
     });
+    const current = (await startResponse.json()) as { currentRound?: { id: string } };
 
-    const response = await app.request("/api/round/round-1");
+    const roundId = current.currentRound?.id;
+    const response = await app.request(`/api/round/${roundId}`);
 
     expect(response.status).toBe(200);
-    const snapshot = (await response.json()) as Record<string, unknown>;
-    expect(snapshot).toMatchObject({
-      id: "round-1",
-      players: ["carol", "dave"],
-      phase: "prompt",
-    });
+    const snapshot = (await response.json()) as { players: string[]; phase: string };
+    expect(snapshot.players).toEqual(["host", "carol", "dave", "erin"]);
+    expect(snapshot.phase).toBe("prompt");
   });
 });

@@ -8,52 +8,51 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WebSocket } from "ws";
 
-import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
 import { RealScheduler } from "./adapters/RealScheduler.js";
 import { WebSocketBus } from "./adapters/WebSocketBus.js";
 import { createBackendApp } from "./app.js";
 import {
-  InMemoryGameGateway,
-  InMemoryRoundGateway,
+  BroadcastReactor,
+  GameService,
+  InMemoryGameStore,
   createGameConfig,
-  dispatchCommand,
 } from "./core.js";
-import type { CommandContext, GameId, ImageGenerator, Logger } from "./core.js";
+import type { PhaseTimeout } from "./core.js";
+import type { GameId } from "./core.js";
 import { createConsoleLogger } from "./logger.js";
 
 const DEFAULT_PORT = Number(process.env["PORT"] ?? 8787);
-const OPENAI_API_KEY = process.env["OPENAI_API_KEY"] ?? "";
-
 export async function startServer(): Promise<void> {
   const logger = createConsoleLogger("backend-local");
-  const roundGateway = new InMemoryRoundGateway();
-  const gameGateway = new InMemoryGameGateway();
   const bus = new WebSocketBus(logger);
   const config = createGameConfig();
-  const game = await gameGateway.createGame("host", config);
-  let activeGameId: GameId = game.id;
-  const imageGenerator = createImageGenerator(logger);
+  const gameStore = new InMemoryGameStore();
+  const initialGame = {
+    id: "game-1" as GameId,
+    lobby: {
+      host: "host",
+      players: ["host"],
+      config,
+    },
+  };
+  await gameStore.createGame(initialGame);
+  let activeGameId: GameId = initialGame.id;
 
-  let scheduler: RealScheduler;
-
-  const createContext = (): CommandContext => ({
-    gameGateway,
-    roundGateway,
-    bus,
-    imageGenerator,
-    scheduler,
+  let service: GameService;
+  const scheduler = new RealScheduler({
+    runTimeout: async (cmd: PhaseTimeout): Promise<void> =>
+      service.run(activeGameId, cmd),
     logger,
   });
-
-  scheduler = new RealScheduler({
-    contextFactory: async (): Promise<CommandContext> => createContext(),
-    logger,
+  service = new GameService({
+    store: gameStore,
+    reactors: [new BroadcastReactor()],
+    reactorContext: { bus, scheduler, logger },
   });
 
   const app = createBackendApp({
     port: DEFAULT_PORT,
-    gameGateway,
-    roundGateway,
+    gameStore,
     bus,
     defaultConfig: config,
     getActiveGameId: (): GameId => activeGameId,
@@ -61,24 +60,24 @@ export async function startServer(): Promise<void> {
       activeGameId = next;
     },
     logger,
-    createContext,
-    dispatch: dispatchCommand,
+    service,
+    scheduler,
   });
 
   const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
 
   app.get(
-    "/ws/:roundId",
+    "/ws/:gameId",
     upgradeWebSocket((c: Context) => {
-      const roundId = c.req.param("roundId");
+      const gameId = c.req.param("gameId");
       return {
         onOpen(_event: Event, ws: WSContext<WebSocket>): void {
           const rawSocket = ws.raw;
           if (!rawSocket) {
-            logger.warn("WebSocket connection missing raw handle", { roundId });
+            logger.warn("WebSocket connection missing raw handle", { gameId });
             return;
           }
-          bus.attach(`round:${roundId}`, rawSocket);
+          bus.attach(`game:${gameId}`, rawSocket);
         },
       };
     }),
@@ -112,20 +111,6 @@ function resolveFrontendPath(): string | null {
     return candidate;
   }
   return null;
-}
-
-function createImageGenerator(logger: Logger): ImageGenerator {
-  if (!OPENAI_API_KEY) {
-    logger.warn("OPENAI_API_KEY is not set. Using placeholder image generator.");
-    return {
-      async generate(prompt: string): Promise<string> {
-        const encodedPrompt = encodeURIComponent(prompt);
-        return `https://dummyimage.com/1024x1024/1f2937/ffffff&text=${encodedPrompt}`;
-      },
-    } satisfies ImageGenerator;
-  }
-
-  return new OpenAIImageGenerator({ apiKey: OPENAI_API_KEY, logger });
 }
 
 void startServer().catch((error) => {

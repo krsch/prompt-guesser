@@ -16,8 +16,8 @@ export class PhaseTimeout implements GameCommand {
   readonly type = "PhaseTimeout";
 
   constructor(
-    private readonly roundId: RoundId,
-    private readonly phase: TimeoutPhase,
+    public readonly roundId: RoundId,
+    public readonly phase: TimeoutPhase,
   ) {}
 
   apply(state: GameState): CommandResult {

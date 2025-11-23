@@ -3,6 +3,9 @@ import type { Context, Next } from "hono";
 
 import type { PublishedEvent } from "./adapters/WebSocketBus.js";
 import {
+  JoinLobby,
+  KickLobbyPlayer,
+  LeaveLobby,
   SetLobbyPlayers,
   StartNextRound,
   SubmitDecoy,
@@ -31,8 +34,6 @@ export interface CreateBackendAppOptions {
   readonly gameStore: GameStore;
   readonly bus: EventBus;
   readonly defaultConfig: GameConfig;
-  readonly getActiveGameId: () => GameId;
-  readonly setActiveGameId: (gameId: GameId) => void;
   readonly logger: Logger;
   readonly service: GameService;
   readonly scheduler: Scheduler;
@@ -43,8 +44,6 @@ export function createBackendApp({
   gameStore,
   bus: _bus,
   defaultConfig,
-  getActiveGameId,
-  setActiveGameId,
   logger,
   service,
   scheduler,
@@ -66,7 +65,126 @@ export function createBackendApp({
     c.json({ ok: true, timestamp: Date.now(), config: { port } }),
   );
 
-  app.post("/api/round/start", async (c: Context) => {
+  app.post("/api/games", async (c: Context) => {
+    const body = await c.req
+      .json<{
+        readonly host?: string;
+      }>()
+      .catch(() => null);
+
+    const host = body?.host ?? "host";
+    if (typeof host !== "string" || host.length === 0) {
+      return c.json({ error: "host is required" }, 400);
+    }
+
+    const gameId = createGameId();
+
+    try {
+      await gameStore.createGame({
+        id: gameId,
+        lobby: {
+          host,
+          players: [host],
+          config: defaultConfig,
+        },
+      });
+
+      const visible = projectVisibleState(await gameStore.loadGame(gameId));
+      return c.newResponse(JSON.stringify(visible), {
+        status: 201,
+        headers: {
+          "content-type": "application/json",
+          Location: `/api/games/${gameId}`,
+        },
+      });
+    } catch (error) {
+      logger.error?.("Failed to create lobby", { error });
+      return c.json({ error: getErrorMessage(error) }, 400);
+    }
+  });
+
+  app.get("/api/games/:gameId", async (c: Context) => {
+    const gameId = c.req.param("gameId") as GameId;
+    try {
+      const game = await gameStore.loadGame(gameId);
+      return c.json(projectVisibleState(game));
+    } catch (error) {
+      logger.error?.("Failed to load lobby", { error });
+      return c.json({ error: "Lobby not found" }, 404);
+    }
+  });
+
+  app.post("/api/games/:gameId/lobby/join", async (c: Context) => {
+    const gameId = c.req.param("gameId") as GameId;
+    const body = await c.req
+      .json<{
+        readonly playerId?: string;
+      }>()
+      .catch(() => null);
+
+    const playerId = body?.playerId;
+    if (typeof playerId !== "string" || playerId.length === 0) {
+      return c.json({ error: "playerId is required" }, 400);
+    }
+
+    try {
+      await service.run(gameId, new JoinLobby(playerId));
+      const visible = projectVisibleState(await gameStore.loadGame(gameId));
+      return c.json(visible);
+    } catch (error) {
+      logger.error?.("Failed to join lobby", { error });
+      return c.json({ error: getErrorMessage(error) }, 400);
+    }
+  });
+
+  app.post("/api/games/:gameId/lobby/leave", async (c: Context) => {
+    const gameId = c.req.param("gameId") as GameId;
+    const body = await c.req
+      .json<{
+        readonly playerId?: string;
+      }>()
+      .catch(() => null);
+
+    const playerId = body?.playerId;
+    if (typeof playerId !== "string" || playerId.length === 0) {
+      return c.json({ error: "playerId is required" }, 400);
+    }
+
+    try {
+      await service.run(gameId, new LeaveLobby(playerId));
+      const visible = projectVisibleState(await gameStore.loadGame(gameId));
+      return c.json(visible);
+    } catch (error) {
+      logger.error?.("Failed to leave lobby", { error });
+      return c.json({ error: getErrorMessage(error) }, 400);
+    }
+  });
+
+  app.post("/api/games/:gameId/lobby/kick", async (c: Context) => {
+    const gameId = c.req.param("gameId") as GameId;
+    const body = await c.req
+      .json<{
+        readonly playerId?: string;
+      }>()
+      .catch(() => null);
+
+    const playerId = body?.playerId;
+    if (typeof playerId !== "string" || playerId.length === 0) {
+      return c.json({ error: "playerId is required" }, 400);
+    }
+
+    try {
+      await service.run(gameId, new KickLobbyPlayer(playerId));
+      const visible = projectVisibleState(await gameStore.loadGame(gameId));
+      return c.json(visible);
+    } catch (error) {
+      logger.error?.("Failed to kick player", { error });
+      return c.json({ error: getErrorMessage(error) }, 400);
+    }
+  });
+
+  app.post("/api/games/:gameId/rounds/start", async (c: Context) => {
+    const gameId = c.req.param("gameId") as GameId;
     const body = await c.req
       .json<{
         readonly players: readonly string[];
@@ -89,7 +207,6 @@ export function createBackendApp({
     }
 
     const now = Date.now();
-    const gameId = getActiveGameId();
     const roundId = `round-${now}` as RoundId;
     const seed = now;
 
@@ -100,23 +217,29 @@ export function createBackendApp({
           lobby: { host: activePlayer, players: [activePlayer], config: defaultConfig },
         });
       });
-      setActiveGameId(gameId);
 
       await service.run(gameId, new SetLobbyPlayers(players));
       await service.run(gameId, new StartNextRound(roundId, activePlayer, seed, now));
       await scheduler.scheduleTimeout(roundId, "prompt", defaultConfig.promptDurationMs);
       const visible = projectVisibleState(await gameStore.loadGame(gameId));
-      return c.json(visible);
+      return c.newResponse(JSON.stringify(visible), {
+        status: 201,
+        headers: {
+          "content-type": "application/json",
+          Location: `/api/games/${gameId}/rounds/${roundId}`,
+        },
+      });
     } catch (error) {
       logger.error?.("Failed to start round", { error });
       return c.json({ error: getErrorMessage(error) }, 400);
     }
   });
 
-  app.get("/api/round/:id", async (c: Context) => {
+  app.get("/api/games/:gameId/rounds/:id", async (c: Context) => {
+    const gameId = c.req.param("gameId") as GameId;
     const roundId = c.req.param("id") as RoundId;
     try {
-      const game = await gameStore.loadGame(getActiveGameId());
+      const game = await gameStore.loadGame(gameId);
       const current = game.currentRound;
       if (!current || current.id !== roundId) {
         return c.json({ error: "Round not found" }, 404);
@@ -132,7 +255,8 @@ export function createBackendApp({
     }
   });
 
-  app.post("/api/round/:id/prompt", async (c: Context) => {
+  app.post("/api/games/:gameId/rounds/:id/prompt", async (c: Context) => {
+    const gameId = c.req.param("gameId") as GameId;
     const roundId = c.req.param("id") as RoundId;
     const body = await c.req
       .json<{
@@ -148,7 +272,7 @@ export function createBackendApp({
     const command = new SubmitPrompt(roundId, body.playerId, body.prompt);
 
     try {
-      await service.run(getActiveGameId(), command);
+      await service.run(gameId, command);
       return c.json({ ok: true });
     } catch (error) {
       logger.warn?.("Prompt submission failed", { roundId, error });
@@ -156,7 +280,8 @@ export function createBackendApp({
     }
   });
 
-  app.post("/api/round/:id/decoy", async (c: Context) => {
+  app.post("/api/games/:gameId/rounds/:id/decoy", async (c: Context) => {
+    const gameId = c.req.param("gameId") as GameId;
     const roundId = c.req.param("id") as RoundId;
     const body = await c.req
       .json<{
@@ -172,7 +297,7 @@ export function createBackendApp({
     const command = new SubmitDecoy(roundId, body.playerId, body.prompt);
 
     try {
-      await service.run(getActiveGameId(), command);
+      await service.run(gameId, command);
       return c.json({ ok: true });
     } catch (error) {
       logger.warn?.("Decoy submission failed", { roundId, error });
@@ -180,7 +305,8 @@ export function createBackendApp({
     }
   });
 
-  app.post("/api/round/:id/vote", async (c: Context) => {
+  app.post("/api/games/:gameId/rounds/:id/vote", async (c: Context) => {
+    const gameId = c.req.param("gameId") as GameId;
     const roundId = c.req.param("id") as RoundId;
     const body = await c.req
       .json<{
@@ -200,7 +326,7 @@ export function createBackendApp({
     const command = new SubmitVote(roundId, body.playerId, body.promptIndex);
 
     try {
-      await service.run(getActiveGameId(), command);
+      await service.run(gameId, command);
       return c.json({ ok: true });
     } catch (error) {
       logger.warn?.("Vote submission failed", { roundId, error });
@@ -217,3 +343,9 @@ function getErrorMessage(error: unknown): string {
   }
   return "Unknown error";
 }
+
+function createGameId(): GameId {
+  return `game-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}` as GameId;
+}
+
+// Explicit game creation is required; no auto-create helpers here.

@@ -22,34 +22,24 @@ export interface VisibleGameState {
 }
 
 export function projectVisibleState(state: GameState): VisibleGameState {
-  const currentRound = state.currentRound;
-  if (!currentRound) {
-    return {
-      id: state.id,
-      lobby: state.lobby,
-    };
-  }
-
-  return {
+  const base: VisibleGameState = {
     id: state.id,
     lobby: state.lobby,
+  };
+
+  if (!state.currentRound) return base;
+
+  return {
+    ...base,
     currentRound: {
-      id: currentRound.id,
-      state: projectVisibleRound(currentRound.state),
+      id: state.currentRound.id,
+      state: projectVisibleRound(state.currentRound.state),
     },
   };
 }
 
 function projectVisibleRound(round: RoundState): VisibleRoundState {
-  const {
-    id,
-    players,
-    activePlayer,
-    phase,
-    imageUrl,
-    scores,
-    shuffleOrder,
-  } = round;
+  const { id, players, activePlayer, phase, imageUrl, scores, shuffleOrder } = round;
 
   return {
     id,

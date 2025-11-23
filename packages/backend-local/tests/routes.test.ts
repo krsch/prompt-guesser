@@ -7,17 +7,12 @@ import { createTestContext } from "./support/testContext.js";
 describe("backend-local HTTP routes", () => {
   it("reports health status", async () => {
     const testContext = createTestContext();
-    let activeGameId: GameId = testContext.gameId;
     const app = createBackendApp({
       port: 4321,
       gameStore: testContext.gameStore,
       bus: testContext.bus,
       logger: testContext.logger,
       defaultConfig: testContext.config,
-      getActiveGameId: () => activeGameId,
-      setActiveGameId: (next) => {
-        activeGameId = next;
-      },
       service: testContext.service,
       scheduler: testContext.scheduler,
     });
@@ -36,7 +31,6 @@ describe("backend-local HTTP routes", () => {
     vi.setSystemTime(now);
 
     const testContext = createTestContext();
-    let activeGameId: GameId = testContext.gameId;
 
     const app = createBackendApp({
       port: 9999,
@@ -44,24 +38,21 @@ describe("backend-local HTTP routes", () => {
       bus: testContext.bus,
       logger: testContext.logger,
       defaultConfig: testContext.config,
-      getActiveGameId: () => activeGameId,
-      setActiveGameId: (next) => {
-        activeGameId = next;
-      },
       service: testContext.service,
       scheduler: testContext.scheduler,
     });
 
-    const response = await app.request("/api/round/start", {
+    const response = await app.request(`/api/games/${testContext.gameId}/rounds/start`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ players: ["alice", "bob", "carol"], activePlayer: "alice" }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     const visible = (await response.json()) as {
       currentRound?: { id: string; state: { players: string[] } };
     };
+    const location = response.headers.get("Location");
     expect(visible.currentRound?.state.players).toEqual([
       "host",
       "alice",
@@ -73,26 +64,24 @@ describe("backend-local HTTP routes", () => {
       phase: "prompt",
       delayMs: testContext.config.promptDurationMs,
     });
+    expect(location).toBe(
+      `/api/games/${testContext.gameId}/rounds/${visible.currentRound?.id}`,
+    );
   });
 
   it("returns 400 for invalid start payloads", async () => {
     const testContext = createTestContext();
-    let activeGameId: GameId = testContext.gameId;
     const app = createBackendApp({
       port: 9999,
       gameStore: testContext.gameStore,
       bus: testContext.bus,
       logger: testContext.logger,
       defaultConfig: testContext.config,
-      getActiveGameId: () => activeGameId,
-      setActiveGameId: (next) => {
-        activeGameId = next;
-      },
       service: testContext.service,
       scheduler: testContext.scheduler,
     });
 
-    const response = await app.request("/api/round/start", {
+    const response = await app.request(`/api/games/${testContext.gameId}/rounds/start`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ players: [] }),
@@ -105,14 +94,9 @@ describe("backend-local HTTP routes", () => {
 
   it("loads a round snapshot", async () => {
     const testContext = createTestContext();
-    let activeGameId: GameId = testContext.gameId;
     const app = createBackendApp({
       port: 9999,
       defaultConfig: testContext.config,
-      getActiveGameId: () => activeGameId,
-      setActiveGameId: (next) => {
-        activeGameId = next;
-      },
       bus: testContext.bus,
       logger: testContext.logger,
       gameStore: testContext.gameStore,
@@ -120,19 +104,117 @@ describe("backend-local HTTP routes", () => {
       scheduler: testContext.scheduler,
     });
 
-    const startResponse = await app.request("/api/round/start", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ players: ["carol", "dave", "erin"], activePlayer: "carol" }),
-    });
+    const startResponse = await app.request(
+      `/api/games/${testContext.gameId}/rounds/start`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          players: ["carol", "dave", "erin"],
+          activePlayer: "carol",
+        }),
+      },
+    );
     const current = (await startResponse.json()) as { currentRound?: { id: string } };
 
     const roundId = current.currentRound?.id;
-    const response = await app.request(`/api/round/${roundId}`);
+    const response = await app.request(
+      `/api/games/${testContext.gameId}/rounds/${roundId}`,
+    );
 
     expect(response.status).toBe(200);
     const snapshot = (await response.json()) as { players: string[]; phase: string };
     expect(snapshot.players).toEqual(["host", "carol", "dave", "erin"]);
     expect(snapshot.phase).toBe("prompt");
+  });
+
+  it("creates a lobby and returns visible state", async () => {
+    const testContext = createTestContext();
+    const app = createBackendApp({
+      port: 9999,
+      gameStore: testContext.gameStore,
+      bus: testContext.bus,
+      logger: testContext.logger,
+      defaultConfig: testContext.config,
+      service: testContext.service,
+      scheduler: testContext.scheduler,
+    });
+
+    const response = await app.request("/api/games", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ host: "new-host" }),
+    });
+
+    expect(response.status).toBe(201);
+    const location = response.headers.get("Location");
+    const visible = (await response.json()) as {
+      id: string;
+      lobby: { players: string[] };
+    };
+    expect(visible.lobby.players).toEqual(["new-host"]);
+    expect(location).toBe(`/api/games/${visible.id}`);
+    const stored = await testContext.gameStore.loadGame(visible.id as GameId);
+    expect(stored.lobby.players).toEqual(["new-host"]);
+  });
+
+  it("joins and leaves lobby via dedicated endpoints", async () => {
+    const testContext = createTestContext();
+    const app = createBackendApp({
+      port: 9999,
+      gameStore: testContext.gameStore,
+      bus: testContext.bus,
+      logger: testContext.logger,
+      defaultConfig: testContext.config,
+      service: testContext.service,
+      scheduler: testContext.scheduler,
+    });
+
+    const joinRes = await app.request(`/api/games/${testContext.gameId}/lobby/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ playerId: "alice" }),
+    });
+    expect(joinRes.status).toBe(200);
+    const afterJoin = (await joinRes.json()) as { lobby: { players: string[] } };
+    expect(afterJoin.lobby.players).toEqual(["host", "alice"]);
+
+    const leaveRes = await app.request(`/api/games/${testContext.gameId}/lobby/leave`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ playerId: "alice" }),
+    });
+    expect(leaveRes.status).toBe(200);
+    const afterLeave = (await leaveRes.json()) as { lobby: { players: string[] } };
+    expect(afterLeave.lobby.players).toEqual(["host"]);
+  });
+
+  it("kicks a player from lobby", async () => {
+    const testContext = createTestContext();
+    const app = createBackendApp({
+      port: 9999,
+      gameStore: testContext.gameStore,
+      bus: testContext.bus,
+      logger: testContext.logger,
+      defaultConfig: testContext.config,
+      service: testContext.service,
+      scheduler: testContext.scheduler,
+    });
+
+    await app.request(`/api/games/${testContext.gameId}/lobby/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ playerId: "alice" }),
+    });
+
+    const kickRes = await app.request(`/api/games/${testContext.gameId}/lobby/kick`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ playerId: "alice" }),
+    });
+
+    expect(kickRes.status).toBe(200);
+    const visible = (await kickRes.json()) as { lobby: { players: string[] } };
+    expect(visible.lobby.players).toEqual(["host"]);
   });
 });

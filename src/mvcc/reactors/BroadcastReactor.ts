@@ -8,11 +8,17 @@ export class BroadcastReactor implements GameReactor {
     ctx: GameReactorContext,
     _resultKind: "ok" | "failedRound",
   ): Promise<void> {
-    const visible = projectVisibleState(change.after);
-    await ctx.bus.publish(`game:${visible.id}`, {
+    const visibleAfter = projectVisibleState(change.after);
+    const visibleBefore = projectVisibleState(change.before);
+
+    if (JSON.stringify(visibleAfter) === JSON.stringify(visibleBefore)) {
+      return;
+    }
+
+    await ctx.bus.publish(`game:${visibleAfter.id}`, {
       type: "GameStateUpdated",
-      gameId: visible.id,
-      state: visible,
+      gameId: visibleAfter.id,
+      state: visibleAfter,
     });
   }
 }

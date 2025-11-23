@@ -55,10 +55,6 @@ export async function startServer(): Promise<void> {
     gameStore,
     bus,
     defaultConfig: config,
-    getActiveGameId: (): GameId => activeGameId,
-    setActiveGameId: (next: GameId): void => {
-      activeGameId = next;
-    },
     logger,
     service,
     scheduler,

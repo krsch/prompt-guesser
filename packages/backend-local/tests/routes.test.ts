@@ -92,6 +92,27 @@ describe("backend-local HTTP routes", () => {
     expect(body).toHaveProperty("error");
   });
 
+  it("fails to start a round for a missing game", async () => {
+    const testContext = createTestContext();
+    const app = createBackendApp({
+      port: 9999,
+      gameStore: testContext.gameStore,
+      bus: testContext.bus,
+      logger: testContext.logger,
+      defaultConfig: testContext.config,
+      service: testContext.service,
+      scheduler: testContext.scheduler,
+    });
+
+    const response = await app.request(`/api/games/missing-game/rounds/start`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ players: ["alice", "bob", "carol"], activePlayer: "alice" }),
+    });
+
+    expect(response.status).toBe(404);
+  });
+
   it("loads a round snapshot", async () => {
     const testContext = createTestContext();
     const app = createBackendApp({

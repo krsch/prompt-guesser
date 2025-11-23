@@ -211,12 +211,7 @@ export function createBackendApp({
     const seed = now;
 
     try {
-      await gameStore.loadGame(gameId).catch(async () => {
-        await gameStore.createGame({
-          id: gameId,
-          lobby: { host: activePlayer, players: [activePlayer], config: defaultConfig },
-        });
-      });
+      await gameStore.loadGame(gameId);
 
       await service.run(gameId, new SetLobbyPlayers(players));
       await service.run(gameId, new StartNextRound(roundId, activePlayer, seed, now));
@@ -235,6 +230,10 @@ export function createBackendApp({
         },
       });
     } catch (error) {
+      if (error instanceof Error && /not found/i.test(error.message)) {
+        logger.warn?.("Attempted to start round for missing game", { gameId });
+        return c.json({ error: "Game not found" }, 404);
+      }
       logger.error?.("Failed to start round", { error });
       return c.json({ error: getErrorMessage(error) }, 400);
     }

@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WebSocket } from "ws";
 
+import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
 import { RealScheduler } from "./adapters/RealScheduler.js";
 import { WebSocketBus } from "./adapters/WebSocketBus.js";
 import { createBackendApp } from "./app.js";
@@ -19,7 +20,7 @@ import {
   PhaseSchedulerReactor,
   createGameConfig,
 } from "./core.js";
-import type { GameId, PhaseTimeout } from "./core.js";
+import type { GameId, ImageGenerator, PhaseTimeout } from "./core.js";
 import { createConsoleLogger } from "./logger.js";
 
 const DEFAULT_PORT = Number(process.env["PORT"] ?? 8787);
@@ -51,12 +52,9 @@ export async function startServer(): Promise<void> {
   const reactors = [
     new BroadcastReactor(),
     new PhaseSchedulerReactor(),
-    new ImageGenerationReactor({
-      async generate(prompt: string): Promise<string> {
-        const encoded = encodeURIComponent(prompt);
-        return `https://dummyimage.com/1024x1024/1f2937/ffffff&text=${encoded}`;
-      },
-    }),
+    new ImageGenerationReactor(
+      createImageGeneratorOrStub(logger, process.env["OPENAI_API_KEY"]),
+    ),
   ];
 
   service = new GameService({
@@ -128,3 +126,21 @@ void startServer().catch((error) => {
   createConsoleLogger("backend-local").error("Failed to start backend", { error });
   process.exit(1);
 });
+
+function createImageGeneratorOrStub(
+  logger: ReturnType<typeof createConsoleLogger>,
+  apiKey: string | undefined,
+): ImageGenerator {
+  if (apiKey) {
+    logger.info("Using OpenAI image generator");
+    return new OpenAIImageGenerator({ apiKey, logger });
+  }
+
+  logger.warn("OPENAI_API_KEY missing; falling back to placeholder image generator");
+  return {
+    async generate(prompt: string): Promise<string> {
+      const encoded = encodeURIComponent(prompt);
+      return `https://dummyimage.com/1024x1024/1f2937/ffffff&text=${encoded}`;
+    },
+  };
+}

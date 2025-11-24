@@ -1,6 +1,5 @@
-import type { GameId } from "./GameGateway.js";
-import type { PhaseTimeout } from "../commands/PhaseTimeout.js";
-import type { RoundId } from "../typedefs.js";
+import type { PhaseTimeout } from "../../mvcc/commands/PhaseTimeout.js";
+import type { GameId, RoundId } from "../../mvcc/types.js";
 
 /**
  * Infrastructure abstraction responsible for delivering time-based commands to the domain.

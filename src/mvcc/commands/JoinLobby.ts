@@ -1,4 +1,4 @@
-import { CommandError } from "../errors.js";
+import { InvalidRequestError } from "../errors.js";
 import type { CommandResult, GameCommand, GameState, PlayerId } from "../types.js";
 
 export class JoinLobby implements GameCommand {
@@ -8,7 +8,7 @@ export class JoinLobby implements GameCommand {
 
   apply(state: GameState): CommandResult {
     if (!this.playerId) {
-      return { kind: "rejected", error: new CommandError("playerId is required") };
+      return { kind: "rejected", error: new InvalidRequestError("playerId is required") };
     }
 
     const players = state.lobby.players;

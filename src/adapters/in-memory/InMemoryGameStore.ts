@@ -1,6 +1,7 @@
 /* eslint-disable functional/immutable-data */
 /* eslint-disable functional/prefer-readonly-type */
 
+import { NotFoundError } from "../../mvcc/errors.js";
 import type { GameStore, GameStoreUpdateResult } from "../../mvcc/GameStore.js";
 import type { CommandResult, GameId, GameState } from "../../mvcc/types.js";
 
@@ -47,7 +48,7 @@ export class InMemoryGameStore implements GameStore {
   #load(gameId: GameId): GameState {
     const existing = this.#games.get(gameId);
     if (!existing) {
-      throw new Error(`Game ${gameId} not found`);
+      throw new NotFoundError(`Game ${gameId} not found`);
     }
     return existing;
   }

@@ -71,9 +71,6 @@ importers:
       '@hono/standard-validator':
         specifier: ^0.2.0
         version: 0.2.0(@standard-schema/spec@1.0.0)(hono@4.10.3)
-      '@hono/valibot-validator':
-        specifier: ^0.6.0
-        version: 0.6.0(hono@4.10.3)(valibot@1.1.0(typescript@5.9.3))
       '@standard-schema/spec':
         specifier: ^1.0.0
         version: 1.0.0
@@ -339,12 +336,6 @@ packages:
     peerDependencies:
       '@standard-schema/spec': 1.0.0
       hono: '>=3.9.0'
-
-  '@hono/valibot-validator@0.6.0':
-    resolution: {integrity: sha512-p1kbfF9FiXX9+tjWZmDkfjs0GcZ+o6XGFMwCiXiTlUDl9C6Bu+qH5YMgxtokK6hAvMk4s3eScAFwKLC0qeN2Ow==}
-    peerDependencies:
-      hono: '>=3.9.0'
-      valibot: ^1.0.0 || ^1.0.0-beta.4 || ^1.0.0-rc
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -2013,11 +2004,6 @@ snapshots:
     dependencies:
       '@standard-schema/spec': 1.0.0
       hono: 4.10.3
-
-  '@hono/valibot-validator@0.6.0(hono@4.10.3)(valibot@1.1.0(typescript@5.9.3))':
-    dependencies:
-      hono: 4.10.3
-      valibot: 1.1.0(typescript@5.9.3)
 
   '@humanfs/core@0.19.1': {}
 

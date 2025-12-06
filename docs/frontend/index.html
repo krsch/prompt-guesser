@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prompt Guesser — Play without installs</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="top-nav">
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">🎨</div>
+        <div>
+          <div class="brand__name">Prompt Guesser</div>
+          <div class="brand__tagline">Prompt party game for 4–6 players</div>
+        </div>
+      </div>
+      <nav class="nav-links" aria-label="Page navigation">
+        <a href="#room">Room</a>
+        <a href="#phase">Round flow</a>
+        <a href="#players">Players</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="ghost" data-action="copy-code" aria-live="polite">
+          Copy room code
+        </button>
+        <button class="primary" data-action="host">Host room</button>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="hero" id="room">
+        <div class="hero__copy">
+          <p class="eyebrow">Browser-only, zero installs</p>
+          <h1>Host a round and let friends bluff their way to victory.</h1>
+          <p class="lede">
+            Works on mobile and desktop. Share the room code, write your prompts, and see
+            who can outsmart the rest of the table in minutes.
+          </p>
+          <div class="cta-row">
+            <button class="primary" data-action="host">Start a fresh room</button>
+            <button class="secondary" data-action="save-name">Remember my name</button>
+          </div>
+          <div class="pill-list" role="list">
+            <span class="pill" role="listitem">Real-time reveals</span>
+            <span class="pill" role="listitem">Fast prompts</span>
+            <span class="pill" role="listitem">Optimized for touch</span>
+          </div>
+        </div>
+        <form class="join-card" aria-label="Join room form">
+          <div class="join-card__header">
+            <div>
+              <p class="eyebrow">Join friends</p>
+              <h2>Enter room code</h2>
+            </div>
+            <span class="badge" aria-live="polite" data-room-code>WAVE-724</span>
+          </div>
+          <label class="field">
+            <span>Display name</span>
+            <input
+              name="display-name"
+              autocomplete="name"
+              inputmode="text"
+              required
+              placeholder="Nova"
+            />
+          </label>
+          <label class="field">
+            <span>Room code</span>
+            <input
+              name="room-code"
+              autocomplete="one-time-code"
+              inputmode="text"
+              required
+              placeholder="WAVE-724"
+            />
+          </label>
+          <button class="primary full" type="submit">Join room</button>
+          <p class="helper" data-status-line aria-live="polite">Ready to hop in.</p>
+        </form>
+      </section>
+
+      <section class="layout" id="phase">
+        <article class="card phase" data-phase>
+          <header class="card__header">
+            <div>
+              <p class="eyebrow" data-phase-label>Step 1 of 4</p>
+              <h2 data-phase-title>Prompt creation</h2>
+            </div>
+            <div class="phase__timer" role="status" aria-live="polite">
+              <span data-timer-count>45</span>
+              <span class="phase__timer-bar" aria-hidden="true">
+                <span class="phase__timer-fill" data-timer-fill></span>
+              </span>
+            </div>
+          </header>
+          <p class="lede" data-phase-description>
+            The Prompt Giver writes the real prompt. Everyone else is waiting for the
+            image to appear.
+          </p>
+          <div class="phase__content">
+            <div class="phase__image" aria-live="polite" data-phase-image>
+              <div class="image-shell">
+                <div class="image-shell__tag">Generating</div>
+                <div class="image-shell__placeholder">Loading preview…</div>
+              </div>
+            </div>
+            <div class="phase__details" data-phase-details>
+              <h3>Live submissions</h3>
+              <ul class="submissions" data-submissions></ul>
+            </div>
+          </div>
+          <div class="phase__actions">
+            <button class="primary" data-action="advance">Advance phase</button>
+            <button class="ghost" data-action="shuffle">Shuffle prompts</button>
+          </div>
+        </article>
+        <aside class="card" id="players">
+          <header class="card__header">
+            <div>
+              <p class="eyebrow">Lobby</p>
+              <h2>Players & scores</h2>
+            </div>
+            <span class="badge badge--soft" data-round-label>Round 2 of 5</span>
+          </header>
+          <ol class="player-list" data-players></ol>
+          <div class="score-summary" aria-live="polite">
+            <div>
+              <p class="eyebrow">Current leader</p>
+              <p class="score-summary__lead" data-leader>Nova · 12 pts</p>
+            </div>
+            <div>
+              <p class="eyebrow">Room latency</p>
+              <p class="score-summary__lead" data-latency>24 ms</p>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="cards">
+        <article class="card">
+          <h3>Touch-first controls</h3>
+          <p>
+            Large hit targets, strong contrast, and sticky controls stay in reach on
+            phones. Prompts and votes are a quick scroll, no pinching required.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Offline-friendly hosting</h3>
+          <p>
+            Host devices keep the round running with resilient timers. When a connection
+            blips, timers keep ticking and the state re-syncs instantly on return.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Realtime reveals</h3>
+          <p>
+            See who got fooled as soon as everyone locks a vote. The reveal screen pairs
+            prompts with author badges and vote arrows so the story is obvious at a
+            glance.
+          </p>
+        </article>
+      </section>
+
+      <section class="cta">
+        <div>
+          <p class="eyebrow">Ready to bluff?</p>
+          <h2>Spin up a lobby and share the code.</h2>
+          <p class="lede">
+            Use a single mobile browser or mirror to a TV. Everyone else joins from any
+            modern Chrome or Firefox.
+          </p>
+        </div>
+        <div class="cta__actions">
+          <button class="primary" data-action="host">Start hosting</button>
+          <button class="ghost" data-action="copy-code">Copy room code</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Prompt Guesser is a social prompt bluffing game. Built for phones, tablets, and
+        desktops.
+      </p>
+      <p class="helper">
+        Prototype UI — plug into any backend gateway without a framework.
+      </p>
+    </footer>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

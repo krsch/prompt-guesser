@@ -37,7 +37,24 @@ export class PhaseTimeout implements GameCommand {
           round.players.map((playerId) => [playerId, 0] as const),
         ) as Record<PlayerId, number>;
 
-        const finishedRound = { ...round, scores, votes: {}, phase: "finished" as const };
+        const timeoutPrompt =
+          round.prompts?.[round.activePlayer] ?? ("[prompt timed out]" as const);
+        const prompts = {
+          ...round.prompts,
+          [round.activePlayer]: timeoutPrompt,
+        };
+        const imageUrl =
+          round.imageUrl ??
+          "https://dummyimage.com/1024x1024/111827/ffffff&text=prompt+timed+out";
+
+        const finishedRound = {
+          ...round,
+          prompts,
+          imageUrl,
+          scores,
+          votes: {},
+          phase: "finished" as const,
+        };
 
         return {
           kind: "ok",

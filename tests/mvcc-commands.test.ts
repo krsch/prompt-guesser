@@ -9,6 +9,7 @@ import { SubmitPrompt } from "../src/mvcc/commands/SubmitPrompt.js";
 import { SubmitVote } from "../src/mvcc/commands/SubmitVote.js";
 import { CommandError } from "../src/mvcc/errors.js";
 import type { GameState, PlayerId, RoundState } from "../src/mvcc/types.js";
+import { assertValidGameState } from "../src/mvcc/validators.js";
 
 describe("StartNextRound (pure)", () => {
   it("rejects when a round is already active", () => {
@@ -33,6 +34,7 @@ describe("StartNextRound (pure)", () => {
     const res = cmd.apply(state);
     if (res.kind !== "ok") throw new Error("expected ok");
 
+    expectValidState(res.state);
     expect(res.state.currentRound?.id).toBe("round-2");
     expect(res.state.currentRound?.state.phase).toBe("prompt");
     expect(res.state.currentRound?.state.prompts).toEqual({});
@@ -58,6 +60,7 @@ describe("SubmitPrompt (pure)", () => {
     const res = cmd.apply(state);
     if (res.kind !== "ok") throw new Error("expected ok");
 
+    expectValidState(res.state);
     expect(res.state.currentRound?.state.prompts).toEqual({ p1: "real prompt" });
     expect(res.state.currentRound?.state.phase).toBe("prompt");
   });
@@ -72,6 +75,7 @@ describe("SetRoundImage (pure)", () => {
     const res = cmd.apply(state);
     if (res.kind !== "ok") throw new Error("expected ok");
 
+    expectValidState(res.state);
     expect(res.state.currentRound?.state.phase).toBe("guessing");
     expect(res.state.currentRound?.state.imageUrl).toBe("https://img");
   });
@@ -88,10 +92,12 @@ describe("SubmitDecoy (pure)", () => {
 
     const first = new SubmitDecoy(round.id, "p2", "decoy-2").apply(state);
     if (first.kind !== "ok") throw new Error("expected ok");
+    expectValidState(first.state);
     expect(first.state.currentRound?.state.phase).toBe("guessing");
 
     const second = new SubmitDecoy(round.id, "p3", "decoy-3").apply(first.state);
     if (second.kind !== "ok") throw new Error("expected ok");
+    expectValidState(second.state);
     const nextRound = second.state.currentRound?.state;
     expect(nextRound?.phase).toBe("voting");
     expect(nextRound?.shuffleOrder).toHaveLength(3);
@@ -115,11 +121,13 @@ describe("SubmitVote (pure)", () => {
 
     const afterP2 = new SubmitVote(round.id, "p2", 0).apply(state);
     if (afterP2.kind !== "ok") throw new Error("expected ok");
+    expectValidState(afterP2.state);
     expect(afterP2.state.currentRound?.state.votes).toEqual({ p2: 0 });
     expect(afterP2.state.currentRound?.state.phase).toBe("voting");
 
     const afterP3 = new SubmitVote(round.id, "p3", 1).apply(afterP2.state);
     if (afterP3.kind !== "ok") throw new Error("expected ok");
+    expectValidState(afterP3.state);
     const finished = afterP3.state.currentRound?.state;
     expect(finished?.phase).toBe("finished");
     expect(finished?.scores).toEqual({ p1: 3, p2: 4, p3: 0 });
@@ -134,9 +142,12 @@ describe("PhaseTimeout (pure)", () => {
 
     const res = cmd.apply(state);
     if (res.kind !== "ok") throw new Error("expected ok");
+    expectValidState(res.state);
     const finished = res.state.currentRound?.state;
     expect(finished?.phase).toBe("finished");
     expect(finished?.scores).toEqual({ p1: 0, p2: 0, p3: 0 });
+    expect(finished?.prompts?.[round.activePlayer]).toBe("[prompt timed out]");
+    expect(finished?.imageUrl).toMatch(/^https?:\/\//);
   });
 
   it("scores existing votes on voting timeout", () => {
@@ -154,6 +165,7 @@ describe("PhaseTimeout (pure)", () => {
 
     const res = cmd.apply(state);
     if (res.kind !== "ok") throw new Error("expected ok");
+    expectValidState(res.state);
     const finished = res.state.currentRound?.state;
     expect(finished?.phase).toBe("finished");
     expect(finished?.scores).toEqual({ p1: 0, p2: 5, p3: 0 });
@@ -187,4 +199,8 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
   };
 
   return { ...base, ...overrides };
+}
+
+function expectValidState(state: GameState): void {
+  expect(() => assertValidGameState(state)).not.toThrow();
 }

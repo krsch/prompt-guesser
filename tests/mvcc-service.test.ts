@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { InMemoryGameStore } from "../src/adapters/in-memory/InMemoryGameStore.js";
 import { createGameConfig } from "../src/domain/GameConfig.js";
-import { CommandError } from "../src/mvcc/errors.js";
+import { CommandError, StateFailureError } from "../src/mvcc/errors.js";
 import { GameService } from "../src/mvcc/GameService.js";
 import type { GameReactor, GameReactorContextBase } from "../src/mvcc/reactors.js";
 import type { GameCommand, GameId, GameState } from "../src/mvcc/types.js";
@@ -59,6 +59,28 @@ describe("GameService", () => {
     await expect(service.run(initial.id, command)).rejects.toBeInstanceOf(CommandError);
     expect(reactor.handle).not.toHaveBeenCalled();
   });
+
+  it("throws when command fails a round but still runs reactors", async () => {
+    const store = new InMemoryGameStore();
+    const initial = makeInitialState("game-3");
+    await store.createGame(initial);
+
+    const failure = new StateFailureError("round failed");
+    const command: GameCommand = {
+      type: "Failing",
+      apply: () => ({ kind: "failedRound", state: initial, error: failure }),
+    };
+
+    const ctx = makeReactorContext();
+    const reactor: GameReactor = { handle: vi.fn(async () => {}) };
+    const service = new GameService({ store, reactors: [reactor], reactorContext: ctx });
+
+    await expect(service.run(initial.id, command)).rejects.toBe(failure);
+    expect(reactor.handle).toHaveBeenCalledTimes(1);
+    const changeArg = (reactor.handle as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(changeArg?.before).toEqual(initial);
+    expect(changeArg?.after.currentRound?.state.phase).toBe("failed");
+  });
 });
 
 function makeReactorContext(): GameReactorContextBase {
@@ -76,6 +98,14 @@ function makeReactorContext(): GameReactorContextBase {
 }
 
 function makeInitialState(gameId: GameId): GameState {
+  const round = {
+    id: "round-1" as const,
+    players: ["p1"],
+    activePlayer: "p1",
+    phase: "prompt" as const,
+    seed: 1,
+    startedAt: 1,
+  };
   return {
     id: gameId,
     lobby: {
@@ -83,5 +113,6 @@ function makeInitialState(gameId: GameId): GameState {
       players: ["p1"],
       config: createGameConfig(),
     },
+    currentRound: { id: round.id, state: round },
   };
 }

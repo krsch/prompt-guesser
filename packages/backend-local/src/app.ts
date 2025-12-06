@@ -470,7 +470,7 @@ function handleValidationFailure(
 
 // Explicit game creation is required; no auto-create helpers here.
 
-type ErrorStatus = 400 | 404 | 500;
+type ErrorStatus = 400 | 404 | 409 | 500;
 
 function mapErrorToHttp(error: unknown): {
   readonly status: ErrorStatus;

@@ -211,10 +211,80 @@ describe("runGameCommand", () => {
       }),
     };
 
-    await runGameCommand(initial.id, command, store, [reactor], ctx);
+    const returnedError = await runGameCommand(
+      initial.id,
+      command,
+      store,
+      [reactor],
+      ctx,
+    );
 
     expect(reactor.handle).toHaveBeenCalledTimes(1);
     expect(reactor.handle).toHaveBeenCalledWith(storeResult.change, ctx, "failedRound");
+    expect(returnedError).toBe(storeResult.error);
+  });
+
+  it("marks round failed when post-apply validation fails", async () => {
+    const store = new InMemoryGameStore();
+    const initial = makeGameState();
+    await store.createGame(initial);
+
+    const command: GameCommand = {
+      type: "Invalid",
+      apply: () => ({
+        kind: "ok",
+        // remove lobby players to trigger validator
+        state: {
+          ...initial,
+          lobby: { ...initial.lobby, players: [] },
+        },
+      }),
+    };
+
+    const reactor: GameReactor = { handle: vi.fn(async () => {}) };
+    const ctx = makeReactorContext();
+
+    const returnedError = await runGameCommand(
+      initial.id,
+      command,
+      store,
+      [reactor],
+      ctx,
+    );
+
+    expect(returnedError).toBeInstanceOf(StateFailureError);
+    expect(reactor.handle).toHaveBeenCalledTimes(1);
+    const changeArg = (reactor.handle as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(changeArg?.after.currentRound?.state.phase).toBe("failed");
+  });
+
+  it("marks round failed when pre-apply validation fails", async () => {
+    const store = new InMemoryGameStore();
+    const invalid = makeGameState({
+      lobby: { ...makeGameState().lobby, players: [] },
+    });
+    await store.createGame(invalid);
+
+    const command: GameCommand = {
+      type: "Noop",
+      apply: () => ({ kind: "ok", state: invalid }),
+    };
+
+    const reactor: GameReactor = { handle: vi.fn(async () => {}) };
+    const ctx = makeReactorContext();
+
+    const returnedError = await runGameCommand(
+      invalid.id,
+      command,
+      store,
+      [reactor],
+      ctx,
+    );
+
+    expect(returnedError).toBeInstanceOf(StateFailureError);
+    expect(reactor.handle).toHaveBeenCalledTimes(1);
+    const changeArg = (reactor.handle as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(changeArg?.after.currentRound?.state.phase).toBe("failed");
   });
 });
 

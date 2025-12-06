@@ -1,11 +1,10 @@
 /* eslint-disable functional/immutable-data */
 /* eslint-disable functional/prefer-readonly-type */
-import type { CommandContext, Logger, RoundId, Scheduler } from "../core.js";
-import { PhaseTimeout, dispatchCommand } from "../core.js";
+import type { GameId, Logger, RoundId, Scheduler } from "../core.js";
+import { PhaseTimeout } from "../core.js";
 
 interface RealSchedulerOptions {
-  readonly dispatch?: typeof dispatchCommand;
-  readonly contextFactory: () => Promise<CommandContext>;
+  readonly runTimeout: (cmd: PhaseTimeout, gameId: GameId) => Promise<void>;
   readonly logger?: Logger;
 }
 
@@ -13,13 +12,11 @@ type TimeoutKey = string;
 
 export class RealScheduler implements Scheduler {
   #timers: Map<TimeoutKey, ReturnType<typeof setTimeout>> = new Map();
-  readonly #dispatch: typeof dispatchCommand;
-  readonly #contextFactory: RealSchedulerOptions["contextFactory"];
+  readonly #runTimeout: RealSchedulerOptions["runTimeout"];
   readonly #logger: Logger | undefined;
 
   constructor(options: RealSchedulerOptions) {
-    this.#dispatch = options.dispatch ?? dispatchCommand;
-    this.#contextFactory = options.contextFactory;
+    this.#runTimeout = options.runTimeout;
     this.#logger = options.logger;
   }
 
@@ -27,6 +24,7 @@ export class RealScheduler implements Scheduler {
     roundId: RoundId,
     phase: PhaseTimeout["phase"],
     delayMs: number,
+    gameId: GameId,
   ): Promise<void> {
     if (delayMs < 0) {
       throw new Error("Timeout delay must be non-negative");
@@ -43,8 +41,7 @@ export class RealScheduler implements Scheduler {
     const timer = setTimeout(async () => {
       this.#timers.delete(key);
       try {
-        const context = await this.#contextFactory();
-        await this.#dispatch(new PhaseTimeout(roundId, phase, Date.now()), context);
+        await this.#runTimeout(new PhaseTimeout(roundId, phase), gameId);
       } catch (error) {
         this.#logger?.error?.("Failed to dispatch scheduled timeout", {
           roundId,

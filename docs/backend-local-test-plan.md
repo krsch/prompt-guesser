@@ -1,20 +1,17 @@
 # Backend Local — Test Plan
 
-**Package:** `@prompt-guesser/backend-local`
-**Role:** Local runtime for Prompt Guesser, primarily for manual testing & dev, with light automated coverage to ensure wiring doesn’t silently break.
+**Package:** `@prompt-guesser/backend-local`  
+**Role:** Local runtime for Prompt Guesser, primarily for manual testing & dev, with light automated coverage to ensure MVCC wiring doesn’t silently break.
 
 ---
 
 ## 1. Testing Philosophy
 
-- **Do not re-test domain rules.**
-  Scoring, phase transitions, invariants, etc. are covered by the domain’s own tests.
-
+- **Do not re-test MVCC command logic.** That is covered by the core package tests.
 - **Focus on runtime wiring:**
-  - Routes → `dispatchCommand`
-  - Adapters → ports (`RoundGateway`, `Scheduler`, `MessageBus`, `ImageGenerator`)
-  - Event flow → HTTP/WS integration
-
+  - HTTP routes → `GameService` + MVCC commands
+  - Adapters → ports (`Scheduler`, `MessageBus`, `ImageGenerator`)
+  - Event flow → HTTP/WS integration and visible-state projection
 - **Keep tests fast and deterministic.**
   Mock `fetch`, `setTimeout`, and sockets; avoid real network where possible.
 
@@ -38,19 +35,22 @@ Preferred tooling (can be adjusted if repo already uses something else):
 ### 3.1 In Scope
 
 1. **Adapters**
-   - `OpenAIImageGenerator` (REST via `fetch`)
+   - `OpenAIImageGenerator` (REST via `fetch`, env-driven)
    - `RealScheduler` (timeouts → `PhaseTimeout`)
    - `WebSocketBus` (event publishing to subscribers)
-   - Any in-memory gateway override (if implemented here)
 
 2. **HTTP API**
    - `/api/health`
-   - `/api/round/start`
-   - `/api/round/:id` (read snapshot)
-   - basic error paths (bad input, round not found)
+   - `POST /api/games` (creates lobby; 201 + Location)
+   - `GET /api/games/:gameId` (visible state)
+   - `POST /api/games/:gameId/lobby/{join|leave|kick}`
+   - `POST /api/games/:gameId/rounds/start` (201 + Location)
+   - `GET /api/games/:gameId/rounds/:id` (visible round)
+   - `POST /api/games/:gameId/rounds/:id/{prompt|decoy|vote}`
+   - basic error paths (bad input, not found)
 
 3. **WS Integration**
-   - WebSocket clients can subscribe to a round.
+   - WebSocket clients subscribe to `game:<id>` and receive visible-state updates.
    - Publishing via `MessageBus` delivers JSON events to those clients.
 
 ### 3.2 Out of Scope
@@ -170,13 +170,12 @@ Use a **`createApp(ctx)`** function so we can test without binding to a port.
   - `status` is `200`.
   - JSON contains `{ ok: true }` and a numeric `ts`.
 
-#### 4.2.2 `/api/round/start`
+#### 4.2.2 `/api/games/:gameId/rounds/start`
 
-**Goal:** Ensure starting a round hits the gateway & scheduler as expected and returns a sensible payload.
+**Goal:** Ensure starting a round hits the MVCC service & scheduler and returns a sensible payload.
 
 Use **fake adapters** (no real OpenAI, no setTimeout):
 
-- `FakeGateway`: implements `startNewRound` and records args.
 - `FakeScheduler`: records scheduled timeouts.
 - `FakeImageGenerator`: returns fixed URL.
 - `FakeBus`: records published events.
@@ -184,20 +183,16 @@ Use **fake adapters** (no real OpenAI, no setTimeout):
 **Test cases:**
 
 - ✅ **Happy path**
-  - Act: `POST /api/round/start` with `{ players: ["p1", "p2", "p3"] }`.
+  - Act: `POST /api/games/:id/rounds/start` with `{ players: [...], activePlayer }`.
   - Assert:
-    - `status` is `200`.
-    - Body includes a `round id`, `players`, and `phase: "prompt"` (or whatever domain returns).
-    - `FakeGateway.startNewRound` called once.
-    - `FakeScheduler.scheduleTimeout` called with:
-      - `roundId` matching returned round
-      - `phase` `"prompt"` (or correct value)
-      - delay equal to configured `promptDurationMs`
+    - `status` is `201` with `Location` header.
+    - Body includes `currentRound` with players merged with host and `phase: "prompt"`.
+    - `FakeScheduler.scheduleTimeout` called with `phase: "prompt"` and configured delay.
+    - `FakeBus` receives a visible-state update.
 
-    - `FakeBus` (if domain publishes immediately) records at least one event, e.g. `PhaseChanged`.
-
-- ✅ **Bad input** (optional)
-  - Missing `players` or fewer than required.
+- ✅ **Bad input / missing game** (optional)
+  - Missing/empty players → 400
+  - Nonexistent game → 404
   - Check for meaningful error and 4xx status.
 
 #### 4.2.3 `/api/round/:id`

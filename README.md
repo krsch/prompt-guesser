@@ -4,20 +4,20 @@ Prompt Guesser is an online, turn-based party game for 4–6 players where every
 
 ## Project status
 
-This repository currently captures the early domain model and design documentation for the game. The TypeScript sources in [`src/domain`](src/domain) define foundational types and ports, while the [`docs`](docs) folder contains the game design document, architectural notes, and future roadmap.
+The codebase is now centered on the MVCC game core in [`src/mvcc`](src/mvcc) with a local backend in [`packages/backend-local`](packages/backend-local). Shared config/ports live in [`src/domain`](src/domain), and the [`docs`](docs) folder contains the design notes and migration plan.
 
 ## Getting started
 
-The project uses Node.js 22 and TypeScript. To install dependencies, run:
+The project uses Node.js 22, pnpm, and TypeScript. To install dependencies, run:
 
 ```bash
-npm install
+pnpm install
 ```
 
-TypeScript definition work can be compiled or type-checked with:
+Run the full check suite (type-check, lint, format check, tests) with:
 
 ```bash
-npx tsc --noEmit
+pnpm run ci
 ```
 
 ### Running tests
@@ -25,27 +25,27 @@ npx tsc --noEmit
 Automated tests are powered by [Vitest](https://vitest.dev/). Run the suite locally with:
 
 ```bash
-npm test -- --run
+pnpm test -- --run
 ```
 
 For watch mode during development:
 
 ```bash
-npm run test:watch
+pnpm run test:watch
 ```
 
 To generate a coverage report (text output plus HTML in `coverage/`):
 
 ```bash
-npm run test:coverage
+pnpm run test:coverage
 ```
 
 ## Contributing
 
 1. Fork the repository and create a feature branch.
-2. Install dependencies with `npm install` (a `.nvmrc` file is included for easy Node.js 22 selection).
+2. Install dependencies with `pnpm install` (a `.nvmrc` file is included for easy Node.js 22 selection).
 3. Implement your changes, adding or updating documentation as needed.
-4. Run `npx tsc --noEmit` and `npm test -- --run` to ensure the TypeScript domain types and automated tests pass.
+4. Run `pnpm run ci` to ensure type checks, formatting, lint, and tests pass.
 5. Submit a pull request describing your changes and referencing any relevant design docs.
 
 For more background on the game rules, UX goals, and planned architecture, explore the files in [`docs/`](docs/).

@@ -8,6 +8,7 @@
     "src",
     "tests",
     "packages/backend-local/src",
-    "packages/backend-local/tests"
+    "packages/backend-local/tests",
+    "packages/backend-cloudflare/src"
   ]
 }

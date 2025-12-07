@@ -1,0 +1,15 @@
+# Prompt Guesser Cloudflare backend
+
+This package hosts a Cloudflare Workers backend that keeps game state inside a Durable Object. Each game maps to a single Durable Object instance, which owns the authoritative MVCC state, schedules round timeouts via alarms, and broadcasts updates over WebSockets.
+
+## Bindings
+
+Add the Durable Object binding and export the class from your Worker configuration:
+
+```
+[[durable_objects.bindings]]
+name = "GAME"
+class_name = "PromptGuesserDurableObject"
+```
+
+The worker expects an optional `OPENAI_API_KEY` secret for real image generation; when absent it falls back to placeholder URLs.

@@ -11,8 +11,12 @@ export type {
   PlayerId,
   RoundId,
   TimePoint,
+  CommandResult,
 } from "@prompt-guesser/core/mvcc/types.js";
-export type { GameStore } from "@prompt-guesser/core/mvcc/GameStore.js";
+export type {
+  GameStore,
+  GameStoreUpdateResult,
+} from "@prompt-guesser/core/mvcc/GameStore.js";
 export { GameService } from "@prompt-guesser/core/mvcc/GameService.js";
 export { BroadcastReactor } from "@prompt-guesser/core/mvcc/reactors/BroadcastReactor.js";
 export { PhaseSchedulerReactor } from "@prompt-guesser/core/mvcc/reactors/PhaseSchedulerReactor.js";

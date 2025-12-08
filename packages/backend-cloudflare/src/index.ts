@@ -1,6 +1,8 @@
 import type {
   DurableObjectNamespace,
   DurableObjectState,
+  Request as CfRequest,
+  Response as CfResponse,
 } from "@cloudflare/workers-types";
 
 import { DurableObjectBus } from "./adapters/DurableObjectBus.js";
@@ -34,6 +36,12 @@ export interface Env {
   readonly OPENAI_API_KEY?: string;
 }
 
+type CfServerWebSocket = WebSocket & { accept(): void };
+declare const WebSocketPair: new () => {
+  readonly 0: WebSocket;
+  readonly 1: CfServerWebSocket;
+};
+
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 
 export default {
@@ -50,12 +58,13 @@ export default {
     if (url.pathname === "/api/games" && request.method === "POST") {
       const gameId = `game-${crypto.randomUUID()}`;
       const body = await request.text();
-      const stub = env.GAME.idFromName(gameId);
+      const stub = env.GAME.get(env.GAME.idFromName(gameId));
       const stubRequest = createStubRequest("/api/create", request, gameId, body);
-      const response = await stub.fetch(stubRequest);
-      const headers = new Headers(response.headers);
+      const response = (await stub.fetch(stubRequest as CfRequest)) as CfResponse;
+      const headers = new Headers();
+      response.headers.forEach((value, key) => headers.append(key, value));
       headers.set("Location", `/api/games/${gameId}`);
-      return new Response(response.body, {
+      return new Response(await response.text(), {
         status: response.status,
         statusText: response.statusText,
         headers,
@@ -67,22 +76,23 @@ export default {
       if (!gameId) {
         return new Response("Game id required", { status: 400 });
       }
-      const stub = env.GAME.idFromName(gameId);
+      const stub = env.GAME.get(env.GAME.idFromName(gameId));
       const stubRequest = createStubRequest("/ws", request, gameId);
-      return stub.fetch(stubRequest);
+      const stubResponse = (await stub.fetch(stubRequest as CfRequest)) as CfResponse;
+      return stubResponse as unknown as Response;
     }
 
     const gameMatch = url.pathname.match(/^\/api\/games\/(?<gameId>[^/]+)(?<rest>.*)$/);
-    if (!gameMatch || !gameMatch.groups?.gameId) {
+    const gameId = gameMatch?.groups?.["gameId"];
+    const rest = gameMatch?.groups?.["rest"] ?? "";
+
+    if (!gameId) {
       return new Response(JSON.stringify({ error: "Not found" }), {
         status: 404,
         headers: JSON_HEADERS,
       });
     }
-
-    const gameId = gameMatch.groups.gameId;
-    const rest = gameMatch.groups.rest ?? "";
-    const stub = env.GAME.idFromName(gameId);
+    const stub = env.GAME.get(env.GAME.idFromName(gameId));
 
     const body = request.method === "POST" ? await request.text() : undefined;
     const targetPath = mapPath(rest, request.method);
@@ -93,7 +103,8 @@ export default {
       });
     }
     const stubRequest = createStubRequest(targetPath, request, gameId, body);
-    return stub.fetch(stubRequest);
+    const stubResponse = (await stub.fetch(stubRequest as CfRequest)) as CfResponse;
+    return stubResponse as unknown as Response;
   },
 };
 
@@ -105,12 +116,12 @@ function mapPath(rest: string, method: string): string | null {
   if (rest === "/rounds/start" && method === "POST") return "/api/rounds/start";
 
   const roundMatch = rest.match(/^\/rounds\/(?<roundId>[^/]+)(?<suffix>.*)$/);
-  if (!roundMatch || !roundMatch.groups?.roundId) {
+  const roundId = roundMatch?.groups?.["roundId"];
+  const suffix = roundMatch?.groups?.["suffix"] ?? "";
+
+  if (!roundId) {
     return null;
   }
-
-  const roundId = roundMatch.groups.roundId;
-  const suffix = roundMatch.groups.suffix ?? "";
 
   if (suffix === "" && method === "GET") return `/api/rounds/${roundId}`;
   if (suffix === "/prompt" && method === "POST") return `/api/rounds/${roundId}/prompt`;
@@ -125,13 +136,17 @@ function createStubRequest(
   request: Request,
   gameId: string,
   body?: string,
-): Request {
-  const headers = new Headers([...request.headers, ["x-game-id", gameId]]);
+): CfRequest {
+  const headers = new Headers();
+  request.headers.forEach((value, key) => {
+    headers.append(key, value);
+  });
+  headers.set("x-game-id", gameId);
   const init: RequestInit =
     body === undefined
       ? { method: request.method, headers }
       : { method: request.method, headers, body };
-  return new Request(`https://do${path}`, init);
+  return new Request(`https://do${path}`, init) as unknown as CfRequest;
 }
 
 export class PromptGuesserDurableObject {
@@ -201,7 +216,7 @@ export class PromptGuesserDurableObject {
       return this.#handleCommand(
         gameId,
         async (body) => {
-          const { playerId } = body;
+          const playerId = requireString(body["playerId"], "playerId");
           await this.#service.run(gameId, new JoinLobby(playerId));
           return this.#respondWithVisibleState(gameId);
         },
@@ -213,7 +228,7 @@ export class PromptGuesserDurableObject {
       return this.#handleCommand(
         gameId,
         async (body) => {
-          const { playerId } = body;
+          const playerId = requireString(body["playerId"], "playerId");
           await this.#service.run(gameId, new LeaveLobby(playerId));
           return this.#respondWithVisibleState(gameId);
         },
@@ -225,7 +240,7 @@ export class PromptGuesserDurableObject {
       return this.#handleCommand(
         gameId,
         async (body) => {
-          const { playerId } = body;
+          const playerId = requireString(body["playerId"], "playerId");
           await this.#service.run(gameId, new KickLobbyPlayer(playerId));
           return this.#respondWithVisibleState(gameId);
         },
@@ -237,9 +252,15 @@ export class PromptGuesserDurableObject {
       return this.#handleCommand(
         gameId,
         async (body) => {
-          const players = body.players as readonly string[];
+          const players = requireStringArray(body["players"], "players");
           const fallbackActivePlayer = players[0];
-          const activePlayer = body.activePlayer ?? fallbackActivePlayer;
+          const activePlayer =
+            typeof body["activePlayer"] === "string"
+              ? (body["activePlayer"] as string)
+              : fallbackActivePlayer;
+          if (!activePlayer) {
+            throw new Error("activePlayer is required");
+          }
           const now = Date.now();
           const roundId = `round-${now}` as RoundId;
           const seed = now;
@@ -270,9 +291,9 @@ export class PromptGuesserDurableObject {
     const roundMatch = url.pathname.match(
       /^\/api\/rounds\/(?<roundId>[^/]+)(?<suffix>.*)$/,
     );
-    if (roundMatch && roundMatch.groups?.roundId) {
-      const roundId = roundMatch.groups.roundId as RoundId;
-      const suffix = roundMatch.groups.suffix ?? "";
+    if (roundMatch?.groups?.["roundId"]) {
+      const roundId = roundMatch.groups["roundId"] as RoundId;
+      const suffix = roundMatch.groups["suffix"] ?? "";
 
       if (suffix === "" && request.method === "GET") {
         const visible = (await this.#visibleState(gameId)).currentRound?.state;
@@ -292,7 +313,8 @@ export class PromptGuesserDurableObject {
         return this.#handleCommand(
           gameId,
           async (body) => {
-            const { playerId, prompt } = body;
+            const playerId = requireString(body["playerId"], "playerId");
+            const prompt = requireString(body["prompt"], "prompt");
             await this.#service.run(gameId, new SubmitPrompt(roundId, playerId, prompt));
             return new Response(JSON.stringify({ ok: true }), {
               status: 200,
@@ -307,7 +329,8 @@ export class PromptGuesserDurableObject {
         return this.#handleCommand(
           gameId,
           async (body) => {
-            const { playerId, prompt } = body;
+            const playerId = requireString(body["playerId"], "playerId");
+            const prompt = requireString(body["prompt"], "prompt");
             await this.#service.run(gameId, new SubmitDecoy(roundId, playerId, prompt));
             return new Response(JSON.stringify({ ok: true }), {
               status: 200,
@@ -322,7 +345,8 @@ export class PromptGuesserDurableObject {
         return this.#handleCommand(
           gameId,
           async (body) => {
-            const { playerId, promptIndex } = body;
+            const playerId = requireString(body["playerId"], "playerId");
+            const promptIndex = requireNumber(body["promptIndex"], "promptIndex");
             await this.#service.run(
               gameId,
               new SubmitVote(roundId, playerId, promptIndex),
@@ -369,12 +393,18 @@ export class PromptGuesserDurableObject {
 
   async #handleWebSocket(request: Request): Promise<Response> {
     const gameId = await this.#resolveGameId(request);
-    const pair = new globalThis.WebSocketPair();
-    const [client, server] = Object.values(pair);
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+    if (!client || !server) {
+      throw new Error("Failed to establish WebSocket pair");
+    }
     this.#bus.setChannel(gameId);
     this.#bus.addConnection(server);
     server.accept();
-    return new Response(null, { status: 101, webSocket: client });
+    return new Response(null, { status: 101, webSocket: client } as ResponseInit & {
+      readonly webSocket: WebSocket;
+    });
   }
 
   async #handleCommand(
@@ -439,6 +469,27 @@ export class PromptGuesserDurableObject {
     this.#gameId = gameId;
     this.#bus.setChannel(gameId);
   }
+}
+
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${field} must be a string`);
+  }
+  return value;
+}
+
+function requireNumber(value: unknown, field: string): number {
+  if (typeof value !== "number") {
+    throw new Error(`${field} must be a number`);
+  }
+  return value;
+}
+
+function requireStringArray(value: unknown, field: string): readonly string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`${field} must be an array of strings`);
+  }
+  return value;
 }
 
 function createImageGenerator(

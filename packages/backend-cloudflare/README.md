@@ -13,3 +13,5 @@ class_name = "PromptGuesserDurableObject"
 ```
 
 The worker expects an optional `OPENAI_API_KEY` secret for real image generation; when absent it falls back to placeholder URLs.
+
+The repository includes a `wrangler.toml` with the binding preconfigured. Deploy with `wrangler deploy` after setting any desired secrets.

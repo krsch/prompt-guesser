@@ -1,0 +1,8 @@
+name = "prompt-guesser"
+main = "src/index.ts"
+compatibility_date = "2025-01-07"
+
+[durable_objects]
+bindings = [
+  { name = "GAME", class_name = "PromptGuesserDurableObject" }
+]

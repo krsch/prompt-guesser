@@ -12,7 +12,7 @@ interface AlarmState {
 
 export class DurableObjectScheduler implements Scheduler {
   readonly #state: DurableObjectState;
-  readonly #logger?: Logger;
+  readonly #logger: Logger | undefined;
   readonly #runTimeout: (cmd: PhaseTimeout, gameId: GameId) => Promise<void>;
 
   constructor(options: {

@@ -15,7 +15,9 @@
     "src/**/*.ts",
     "tests/**/*.ts",
     "packages/backend-local/src/**/*.ts",
-    "packages/backend-local/tests/**/*.ts"
+    "packages/backend-local/tests/**/*.ts",
+    "packages/backend-cloudflare/src/**/*.ts",
+    "packages/backend-cloudflare/tests/**/*.ts"
   ],
   "exclude": ["dist", "node_modules", "coverage"]
 }

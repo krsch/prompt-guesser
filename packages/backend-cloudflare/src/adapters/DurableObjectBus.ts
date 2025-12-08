@@ -4,7 +4,7 @@ import type { Logger, MessageBus } from "../core.js";
 
 export class DurableObjectBus implements MessageBus {
   readonly #connections: Set<WebSocket> = new Set();
-  readonly #logger?: Logger;
+  readonly #logger: Logger | undefined;
   #gameChannel: string | null = null;
 
   constructor(logger?: Logger) {

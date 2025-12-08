@@ -4,14 +4,17 @@ This package hosts a Cloudflare Workers backend that keeps game state inside a D
 
 ## Bindings
 
-Add the Durable Object binding and export the class from your Worker configuration:
+Add the Durable Object binding, Workers AI binding, and export the class from your Worker configuration:
 
 ```
 [[durable_objects.bindings]]
 name = "GAME"
 class_name = "PromptGuesserDurableObject"
+
+[[ai]]
+binding = "AI"
 ```
 
-The worker expects an optional `OPENAI_API_KEY` secret for real image generation; when absent it falls back to placeholder URLs.
+Image generation runs through Workers AI using the bound `AI` service. When the binding is absent the backend falls back to placeholder URLs.
 
 The repository includes a `wrangler.toml` with the binding preconfigured. Deploy with `wrangler deploy` after setting any desired secrets.

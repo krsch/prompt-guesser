@@ -8,7 +8,7 @@ import type {
 import { DurableObjectBus } from "./adapters/DurableObjectBus.js";
 import { DurableObjectGameStore } from "./adapters/DurableObjectGameStore.js";
 import { DurableObjectScheduler } from "./adapters/DurableObjectScheduler.js";
-import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
+import { WorkersAIImageGenerator } from "./adapters/WorkersAIImageGenerator.js";
 import {
   BroadcastReactor,
   GameService,
@@ -31,9 +31,13 @@ import {
 } from "./core.js";
 import { createConsoleLogger } from "./logger.js";
 
+type WorkersAiRunner = {
+  readonly run: (model: string, inputs: Record<string, unknown>) => Promise<unknown>;
+};
+
 export interface Env {
   readonly GAME: DurableObjectNamespace;
-  readonly OPENAI_API_KEY?: string;
+  readonly AI?: WorkersAiRunner;
 }
 
 type CfServerWebSocket = WebSocket & { accept(): void };
@@ -62,7 +66,9 @@ export default {
       const stubRequest = createStubRequest("/api/create", request, gameId, body);
       const response = (await stub.fetch(stubRequest as CfRequest)) as CfResponse;
       const headers = new Headers();
-      response.headers.forEach((value, key) => headers.append(key, value));
+      response.headers.forEach((value: string, key: string) =>
+        headers.append(key, value),
+      );
       headers.set("Location", `/api/games/${gameId}`);
       return new Response(await response.text(), {
         status: response.status,
@@ -178,9 +184,7 @@ export class PromptGuesserDurableObject {
     const reactors = [
       new BroadcastReactor(),
       new PhaseSchedulerReactor(),
-      new ImageGenerationReactor(
-        createImageGenerator(this.#env.OPENAI_API_KEY, this.#logger),
-      ),
+      new ImageGenerationReactor(createImageGenerator(this.#env.AI, this.#logger)),
     ];
 
     service = new GameService({
@@ -493,11 +497,11 @@ function requireStringArray(value: unknown, field: string): readonly string[] {
 }
 
 function createImageGenerator(
-  apiKey: string | undefined,
+  ai: WorkersAiRunner | undefined,
   logger: Readonly<ReturnType<typeof createConsoleLogger>>,
-): OpenAIImageGenerator | { readonly generate: (prompt: string) => Promise<string> } {
-  if (apiKey) {
-    return new OpenAIImageGenerator({ apiKey, logger });
+): WorkersAIImageGenerator | { readonly generate: (prompt: string) => Promise<string> } {
+  if (ai) {
+    return new WorkersAIImageGenerator({ ai, logger });
   }
   return {
     async generate(prompt: string): Promise<string> {

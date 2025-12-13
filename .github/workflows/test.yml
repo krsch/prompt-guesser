@@ -32,3 +32,12 @@ jobs:
 
       - name: Run CI suite
         run: pnpm run ci
+
+      - name: Publish Vitest coverage report
+        if: success()
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          json-summary-path: coverage/coverage-summary.json
+          json-final-path: coverage/coverage-final.json
+          comment-on: none
+          file-coverage-mode: all

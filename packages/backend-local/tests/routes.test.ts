@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { StateFailureError } from "@prompt-guesser/core/mvcc/errors.js";
+import { ConflictError } from "@prompt-guesser/core/mvcc/errors.js";
 
 import { createBackendApp } from "../src/app.js";
 import type { GameId, GameService } from "../src/core.js";
@@ -94,6 +95,27 @@ describe("backend-local HTTP routes", () => {
     expect(body).toHaveProperty("error");
   });
 
+  it("returns 400 for invalid params schema", async () => {
+    const testContext = createTestContext();
+    const app = createBackendApp({
+      port: 9999,
+      gameStore: testContext.gameStore,
+      bus: testContext.bus,
+      logger: testContext.logger,
+      defaultConfig: testContext.config,
+      service: testContext.service,
+      scheduler: testContext.scheduler,
+    });
+
+    const response = await app.request(`/api/games//rounds/start`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ players: ["alice", "bob", "carol"], activePlayer: "alice" }),
+    });
+
+    expect(response.status).toBe(404);
+  });
+
   it("fails to start a round for a missing game", async () => {
     const testContext = createTestContext();
     const app = createBackendApp({
@@ -149,6 +171,25 @@ describe("backend-local HTTP routes", () => {
     const snapshot = (await response.json()) as { players: string[]; phase: string };
     expect(snapshot.players).toEqual(["host", "carol", "dave", "erin"]);
     expect(snapshot.phase).toBe("prompt");
+  });
+
+  it("returns 404 when round is missing", async () => {
+    const testContext = createTestContext();
+    const app = createBackendApp({
+      port: 9999,
+      defaultConfig: testContext.config,
+      bus: testContext.bus,
+      logger: testContext.logger,
+      gameStore: testContext.gameStore,
+      service: testContext.service,
+      scheduler: testContext.scheduler,
+    });
+
+    const response = await app.request(
+      `/api/games/${testContext.gameId}/rounds/does-not-exist`,
+    );
+
+    expect(response.status).toBe(404);
   });
 
   it("handles OPTIONS preflight", async () => {
@@ -226,6 +267,38 @@ describe("backend-local HTTP routes", () => {
     expect(response.status).toBe(500);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("internal_error");
+  });
+
+  it("maps conflict domain error to 409", async () => {
+    const testContext = createTestContext();
+    const conflictService = {
+      run: vi.fn(async () => {
+        throw new ConflictError("conflict");
+      }),
+    } as unknown as GameService;
+
+    const app = createBackendApp({
+      port: 9999,
+      gameStore: testContext.gameStore,
+      bus: testContext.bus,
+      logger: testContext.logger,
+      defaultConfig: testContext.config,
+      service: conflictService,
+      scheduler: testContext.scheduler,
+    });
+
+    const response = await app.request(
+      `/api/games/${testContext.gameId}/rounds/${testContext.gameId}/prompt`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ playerId: "p1", prompt: "hi" }),
+      },
+    );
+
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("conflict");
   });
 
   it("creates a lobby and returns visible state", async () => {

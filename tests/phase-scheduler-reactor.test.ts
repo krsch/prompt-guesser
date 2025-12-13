@@ -36,6 +36,43 @@ describe("PhaseSchedulerReactor", () => {
       afterNewRound.id,
     );
   });
+
+  it("schedules guessing and voting when phase advances", async () => {
+    const reactor = new PhaseSchedulerReactor();
+    const scheduler = { scheduleTimeout: vi.fn(async () => {}) };
+    const ctx = makeCtx({ scheduler });
+
+    const before = makeGameState({ roundId: "round-1", phase: "prompt" });
+    const afterGuessing = makeGameState({ roundId: "round-1", phase: "guessing" });
+    await reactor.handle({ before, after: afterGuessing }, ctx, "ok");
+    expect(scheduler.scheduleTimeout).toHaveBeenCalledWith(
+      "round-1",
+      "guessing",
+      afterGuessing.lobby.config.guessingDurationMs,
+      afterGuessing.id,
+    );
+
+    const afterVoting = makeGameState({ roundId: "round-1", phase: "voting" });
+    await reactor.handle({ before: afterGuessing, after: afterVoting }, ctx, "ok");
+    expect(scheduler.scheduleTimeout).toHaveBeenCalledWith(
+      "round-1",
+      "voting",
+      afterVoting.lobby.config.votingDurationMs,
+      afterVoting.id,
+    );
+  });
+
+  it("no-ops when phase does not change", async () => {
+    const reactor = new PhaseSchedulerReactor();
+    const scheduler = { scheduleTimeout: vi.fn(async () => {}) };
+    const ctx = makeCtx({ scheduler });
+
+    const before = makeGameState({ roundId: "round-1", phase: "voting" });
+    const after = makeGameState({ roundId: "round-1", phase: "voting" });
+
+    await reactor.handle({ before, after }, ctx, "ok");
+    expect(scheduler.scheduleTimeout).not.toHaveBeenCalled();
+  });
 });
 
 function makeCtx(overrides: Partial<GameReactorContext>): GameReactorContext {

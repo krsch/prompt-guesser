@@ -40,6 +40,16 @@ To generate a coverage report (text output plus HTML in `coverage/`):
 pnpm run test:coverage
 ```
 
+### Running the full app (backend + frontend)
+
+Run the local backend (serves the static frontend from `frontend/` or `docs/frontend/`) with:
+
+```bash
+pnpm run start
+```
+
+Then open [http://localhost:8787](http://localhost:8787). Use `pnpm run dev` to watch and reload the backend during development. Set `PORT` or `OPENAI_API_KEY` in your environment if needed. A placeholder image generator is used when no OpenAI key is provided.
+
 ## Contributing
 
 1. Fork the repository and create a feature branch.

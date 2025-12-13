@@ -11,6 +11,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "start": "pnpm --filter @prompt-guesser/backend-local start",
+    "dev": "pnpm --filter @prompt-guesser/backend-local dev",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest --watch",

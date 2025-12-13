@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import type { WSContext } from "hono/ws";
 import { existsSync } from "node:fs";
 import type { AddressInfo } from "node:net";
-import { join } from "node:path";
+import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { WebSocket } from "ws";
 
@@ -12,6 +12,7 @@ import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
 import { RealScheduler } from "./adapters/RealScheduler.js";
 import { WebSocketBus } from "./adapters/WebSocketBus.js";
 import { createBackendApp } from "./app.js";
+import type { GameId, ImageGenerator, PhaseTimeout } from "./core.js";
 import {
   BroadcastReactor,
   GameService,
@@ -20,7 +21,6 @@ import {
   PhaseSchedulerReactor,
   createGameConfig,
 } from "./core.js";
-import type { GameId, ImageGenerator, PhaseTimeout } from "./core.js";
 import { createConsoleLogger } from "./logger.js";
 
 const DEFAULT_PORT = Number(process.env["PORT"] ?? 8787);
@@ -95,13 +95,37 @@ export async function startServer(): Promise<void> {
   const frontendPath = resolveFrontendPath();
   if (frontendPath) {
     app.get("/*", async (c: Context): Promise<Response> => {
-      const filePath = join(frontendPath, "index.html");
-      if (!existsSync(filePath)) {
+      if (c.req.path.startsWith("/api")) {
+        return c.json({ error: "Not found" }, 404);
+      }
+
+      const requestPath = c.req.path === "/" ? "index.html" : c.req.path.slice(1);
+      const resolvedPath = normalize(join(frontendPath, requestPath));
+      if (!resolvedPath.startsWith(frontendPath)) {
+        return c.json({ error: "Invalid path" }, 400);
+      }
+
+      const { readFile, stat } = await import("node:fs/promises");
+      const exists = await stat(resolvedPath)
+        .then((info) => info.isFile())
+        .catch(() => false);
+
+      if (exists) {
+        const mimeType = getMimeType(resolvedPath);
+        const headers = new Headers();
+        if (mimeType) {
+          headers.set("Content-Type", mimeType);
+        }
+        const contents = await readFile(resolvedPath);
+        return new Response(new Uint8Array(contents), { headers });
+      }
+
+      const fallbackPath = join(frontendPath, "index.html");
+      if (!existsSync(fallbackPath)) {
         return c.json({ error: "Frontend build not found" }, 404);
       }
 
-      const { readFile } = await import("node:fs/promises");
-      const contents = await readFile(filePath, "utf8");
+      const contents = await readFile(fallbackPath, "utf8");
       return c.html(contents);
     });
   }
@@ -115,11 +139,41 @@ export async function startServer(): Promise<void> {
 
 function resolveFrontendPath(): string | null {
   const current = fileURLToPath(new URL(".", import.meta.url));
-  const candidate = join(current, "../../frontend/dist");
-  if (existsSync(candidate)) {
-    return candidate;
+  const candidates = [
+    join(current, "../../frontend/dist"),
+    join(current, "../../frontend"),
+    join(current, "../../docs/frontend"),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(join(candidate, "index.html"))) {
+      return candidate;
+    }
   }
   return null;
+}
+
+function getMimeType(path: string): string | undefined {
+  const extension = extname(path).toLowerCase();
+  switch (extension) {
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".js":
+      return "text/javascript; charset=utf-8";
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".json":
+      return "application/json; charset=utf-8";
+    case ".svg":
+      return "image/svg+xml";
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    default:
+      return undefined;
+  }
 }
 
 void startServer().catch((error) => {

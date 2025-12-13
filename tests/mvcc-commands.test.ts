@@ -52,6 +52,18 @@ describe("SubmitPrompt (pure)", () => {
     expect(res.kind).toBe("rejected");
   });
 
+  it("rejects changed prompt when already set", () => {
+    const round = makeRoundState({
+      phase: "prompt",
+      prompts: { p1: "real prompt" },
+    });
+    const state = makeGameState({ currentRound: { id: round.id, state: round } });
+    const cmd = new SubmitPrompt(round.id, "p1", "other");
+
+    const res = cmd.apply(state);
+    expect(res.kind).toBe("rejected");
+  });
+
   it("stores the prompt and remains in prompt phase", () => {
     const round = makeRoundState({ phase: "prompt" });
     const state = makeGameState({ currentRound: { id: round.id, state: round } });
@@ -67,6 +79,28 @@ describe("SubmitPrompt (pure)", () => {
 });
 
 describe("SetRoundImage (pure)", () => {
+  it("rejects when prompt not yet submitted", () => {
+    const round = makeRoundState({ phase: "prompt", prompts: {} });
+    const state = makeGameState({ currentRound: { id: round.id, state: round } });
+    const cmd = new SetRoundImage(round.id, "https://img");
+
+    const res = cmd.apply(state);
+    expect(res.kind).toBe("rejected");
+  });
+
+  it("rejects when image already set with different URL", () => {
+    const round = makeRoundState({
+      phase: "prompt",
+      prompts: { p1: "real" },
+      imageUrl: "https://img",
+    });
+    const state = makeGameState({ currentRound: { id: round.id, state: round } });
+    const cmd = new SetRoundImage(round.id, "https://other");
+
+    const res = cmd.apply(state);
+    expect(res.kind).toBe("rejected");
+  });
+
   it("moves to guessing once image is set", () => {
     const round = makeRoundState({ phase: "prompt", prompts: { p1: "real" } });
     const state = makeGameState({ currentRound: { id: round.id, state: round } });
@@ -82,6 +116,32 @@ describe("SetRoundImage (pure)", () => {
 });
 
 describe("SubmitDecoy (pure)", () => {
+  it("rejects when active player attempts decoy", () => {
+    const round = makeRoundState({
+      phase: "guessing",
+      prompts: { p1: "real" },
+      imageUrl: "https://example.com/img",
+    });
+    const state = makeGameState({ currentRound: { id: round.id, state: round } });
+
+    const res = new SubmitDecoy(round.id, "p1", "decoy").apply(state);
+
+    expect(res.kind).toBe("rejected");
+  });
+
+  it("rejects when submitting a different decoy twice", () => {
+    const round = makeRoundState({
+      phase: "guessing",
+      prompts: { p1: "real", p2: "decoy" },
+      imageUrl: "https://example.com/img",
+    });
+    const state = makeGameState({ currentRound: { id: round.id, state: round } });
+
+    const res = new SubmitDecoy(round.id, "p2", "other-decoy").apply(state);
+
+    expect(res.kind).toBe("rejected");
+  });
+
   it("promotes to voting when all prompts are in", () => {
     const round = makeRoundState({
       phase: "guessing",
@@ -106,6 +166,24 @@ describe("SubmitDecoy (pure)", () => {
 });
 
 describe("SubmitVote (pure)", () => {
+  it("rejects duplicate vote with different value", () => {
+    const prompts = { p1: "real", p2: "d2", p3: "d3" };
+    const round: RoundState = {
+      ...makeRoundState({
+        phase: "voting",
+        prompts,
+        imageUrl: "https://example.com/img",
+      }),
+      shuffleOrder: [0, 1, 2],
+      votes: { p2: 0 },
+    };
+    const state = makeGameState({ currentRound: { id: round.id, state: round } });
+
+    const res = new SubmitVote(round.id, "p2", 1).apply(state);
+
+    expect(res.kind).toBe("rejected");
+  });
+
   it("finalizes scores when all votes are in", () => {
     const prompts = { p1: "real", p2: "d2", p3: "d3" };
     const round: RoundState = {

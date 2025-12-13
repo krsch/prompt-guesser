@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { StateFailureError } from "@prompt-guesser/core/mvcc/errors.js";
+
 import { createBackendApp } from "../src/app.js";
-import type { GameId } from "../src/core.js";
+import type { GameId, GameService } from "../src/core.js";
 import { createTestContext } from "./support/testContext.js";
 
 describe("backend-local HTTP routes", () => {
@@ -147,6 +149,83 @@ describe("backend-local HTTP routes", () => {
     const snapshot = (await response.json()) as { players: string[]; phase: string };
     expect(snapshot.players).toEqual(["host", "carol", "dave", "erin"]);
     expect(snapshot.phase).toBe("prompt");
+  });
+
+  it("handles OPTIONS preflight", async () => {
+    const testContext = createTestContext();
+    const app = createBackendApp({
+      port: 9999,
+      defaultConfig: testContext.config,
+      bus: testContext.bus,
+      logger: testContext.logger,
+      gameStore: testContext.gameStore,
+      service: testContext.service,
+      scheduler: testContext.scheduler,
+    });
+
+    const response = await app.request("/api/games", { method: "OPTIONS" });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+  });
+
+  it("returns 413 when payload too large", async () => {
+    const testContext = createTestContext();
+    const app = createBackendApp({
+      port: 9999,
+      gameStore: testContext.gameStore,
+      bus: testContext.bus,
+      logger: testContext.logger,
+      defaultConfig: testContext.config,
+      service: testContext.service,
+      scheduler: testContext.scheduler,
+    });
+
+    const bigBody = JSON.stringify({ host: "x".repeat(70 * 1024) });
+    const response = await app.request("/api/games", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(bigBody.length),
+      },
+      body: bigBody,
+    });
+
+    expect(response.status).toBe(413);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("payload_too_large");
+  });
+
+  it("maps domain internal failure to 500", async () => {
+    const testContext = createTestContext();
+    const failingService = {
+      run: vi.fn(async () => {
+        throw new StateFailureError("boom");
+      }),
+    } as unknown as GameService;
+
+    const app = createBackendApp({
+      port: 9999,
+      gameStore: testContext.gameStore,
+      bus: testContext.bus,
+      logger: testContext.logger,
+      defaultConfig: testContext.config,
+      service: failingService,
+      scheduler: testContext.scheduler,
+    });
+
+    const response = await app.request(
+      `/api/games/${testContext.gameId}/rounds/${testContext.gameId}/prompt`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ playerId: "p1", prompt: "hi" }),
+      },
+    );
+
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("internal_error");
   });
 
   it("creates a lobby and returns visible state", async () => {

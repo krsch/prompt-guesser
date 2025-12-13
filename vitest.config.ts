@@ -4,12 +4,14 @@ import { defineConfig, defineProject } from "vitest/config";
 
 const ROOT_DIR = dirname(fileURLToPath(import.meta.url));
 
-const shared = {
-  resolve: {
-    alias: {
-      "@prompt-guesser/core": resolve(ROOT_DIR, "src"),
-    },
+const sharedResolve = {
+  alias: {
+    "@prompt-guesser/core": resolve(ROOT_DIR, "src"),
   },
+};
+
+export default defineConfig({
+  resolve: sharedResolve,
   test: {
     globals: true,
     environment: "node",
@@ -17,23 +19,16 @@ const shared = {
       enabled: true,
       reporter: ["text", "html", "lcov", "json", "json-summary"],
     },
-  },
-};
-
-export default defineConfig({
-  test: {
     projects: [
       defineProject({
-        ...shared,
+        resolve: sharedResolve,
         test: {
-          ...shared.test,
           include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
         },
       }),
       defineProject({
-        ...shared,
+        resolve: sharedResolve,
         test: {
-          ...shared.test,
           include: ["packages/backend-local/tests/**/*.test.ts"],
         },
       }),

@@ -17,6 +17,7 @@ export default defineConfig({
       "src/**/*.test.ts",
       "tests/**/*.test.ts",
       "packages/backend-local/tests/**/*.test.ts",
+      "packages/backend-cloudflare/tests/**/*.test.ts",
     ],
     coverage: {
       reporter: ["text", "html", "lcov", "json", "json-summary"],

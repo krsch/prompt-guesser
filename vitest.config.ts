@@ -19,7 +19,7 @@ export default defineConfig({
       "packages/backend-local/tests/**/*.test.ts",
     ],
     coverage: {
-      reporter: ["text", "html", "lcov"],
+      reporter: ["text", "html", "lcov", "json", "json-summary"],
     },
   },
 });

@@ -25,6 +25,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -280,6 +284,39 @@ button.full {
 .helper {
   margin: 0;
   color: var(--muted);
+}
+
+.alert {
+  border-radius: var(--radius);
+  border: 2px solid color-mix(in srgb, #f97316 60%, var(--border));
+  background: color-mix(in srgb, #fff7ed 80%, var(--card));
+  color: color-mix(in srgb, var(--text), black 25%);
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+  box-shadow: var(--shadow);
+}
+
+.alert--error {
+  border-color: color-mix(in srgb, #ef4444 60%, var(--border));
+  background: color-mix(in srgb, #fef2f2 80%, var(--card));
+}
+
+.alert__title {
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.alert__body {
+  margin: 0;
+  color: color-mix(in srgb, var(--text), #7f1d1d 35%);
+}
+
+.alert__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .layout {

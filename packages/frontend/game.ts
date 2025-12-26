@@ -1,4 +1,5 @@
 import {
+  ApiError,
   api,
   copyRoomCode,
   requireSessionOrRedirect,
@@ -24,6 +25,11 @@ const phaseImage = document.getElementById("phase-image");
 const timerCount = document.getElementById("timer-count");
 const timerFill = document.getElementById("timer-fill");
 const latencyLine = document.getElementById("latency");
+const errorPanel = document.getElementById("error-panel");
+const errorText = document.getElementById("error-text");
+const backToLobby = document.getElementById("back-to-lobby");
+const retryLoad = document.getElementById("retry-load");
+let currentGameId: string | null = null;
 
 init();
 
@@ -33,21 +39,51 @@ function init(): void {
     window.location.replace("/lobby");
     return;
   }
+  currentGameId = id;
   setRoomCode(id);
   void bootstrap(id);
   window.copyRoom = copyRoom;
+
+  if (backToLobby) {
+    backToLobby.addEventListener("click", () => {
+      window.location.replace("/lobby");
+    });
+  }
+
+  if (retryLoad) {
+    retryLoad.addEventListener("click", () => {
+      if (!currentGameId) return;
+      void bootstrap(currentGameId);
+    });
+  }
 }
 
 async function bootstrap(gameId: string): Promise<void> {
   const session = await requireSessionOrRedirect(window.location.pathname);
   if (!session) return;
+  hideError();
 
   try {
     const game = await api(`/games/${encodeURIComponent(gameId)}`);
     renderGame(game);
+    hideError();
     setStatus(`Joined as ${session.playerName}.`);
   } catch (error) {
-    setStatus(`Could not load game: ${(error as Error).message}`);
+    const apiError = error as ApiError | Error;
+    if (apiError instanceof ApiError) {
+      const detail = apiError.body?.error?.message ?? apiError.message;
+      if (apiError.status === 404) {
+        showError(
+          `Game not found (${apiError.status}). ${
+            detail || "Check the room code and try again."
+          }`,
+        );
+        return;
+      }
+      showError(`Could not load game (${apiError.status}): ${detail}`);
+      return;
+    }
+    showError(`Could not load game: ${apiError.message}`);
   }
 }
 
@@ -135,6 +171,16 @@ function getGameIdFromPath(): string {
 
 function setStatus(message: string): void {
   if (statusLine) statusLine.textContent = message;
+}
+
+function showError(message: string): void {
+  setStatus(message);
+  if (errorText) errorText.textContent = message;
+  if (errorPanel) errorPanel.hidden = false;
+}
+
+function hideError(): void {
+  if (errorPanel) errorPanel.hidden = true;
 }
 
 async function copyRoom(): Promise<void> {

@@ -1,3 +1,11 @@
+export class ApiError extends Error {
+  constructor(message, status, body) {
+    super(message);
+    this.status = status;
+    this.body = body;
+  }
+}
+
 export function api(path, options = {}) {
   return fetch(`/api${path}`, {
     headers: {
@@ -12,7 +20,7 @@ export function api(path, options = {}) {
     const body = isJson ? await response.json() : undefined;
     if (!response.ok) {
       const message = body?.error?.message ?? response.statusText;
-      throw new Error(message);
+      throw new ApiError(message, response.status, body);
     }
     return body;
   });

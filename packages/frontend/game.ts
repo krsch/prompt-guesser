@@ -6,7 +6,12 @@ import {
   storedName,
 } from "./shared.js";
 
-const roomCode = document.getElementById("room-code");
+declare global {
+  interface Window {
+    copyRoom: () => Promise<void>;
+  }
+}
+
 const statusLine = document.getElementById("status-line");
 const playerList = document.getElementById("player-list");
 const leaderLine = document.getElementById("leader");
@@ -30,9 +35,7 @@ function init(): void {
   }
   setRoomCode(id);
   void bootstrap(id);
-  // Expose copy helper for inline handler
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, functional/immutable-data
-  (window as any).copyRoom = copyRoom;
+  window.copyRoom = copyRoom;
 }
 
 async function bootstrap(gameId: string): Promise<void> {
@@ -48,7 +51,9 @@ async function bootstrap(gameId: string): Promise<void> {
   }
 }
 
-function renderGame(visible: { lobby?: { players?: string[] } } | null): void {
+function renderGame(
+  visible: { readonly lobby?: { readonly players?: readonly string[] } } | null,
+): void {
   const players = visible?.lobby?.players ?? [];
   renderPlayers(players);
   renderPhase();

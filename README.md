@@ -42,7 +42,7 @@ pnpm run test:coverage
 
 ### Running the full app (backend + frontend)
 
-Run the local backend (serves the static frontend from `frontend/` or `docs/frontend/`) with:
+Run the local backend (serves the static frontend from `packages/frontend/`) with:
 
 ```bash
 pnpm run start

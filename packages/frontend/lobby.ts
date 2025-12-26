@@ -7,6 +7,13 @@ import {
   storedName,
 } from "./shared.js";
 
+declare global {
+  interface Window {
+    hostRoom: () => Promise<void>;
+    copyLastRoomCode: () => Promise<void>;
+  }
+}
+
 const form = document.getElementById("join-form") as HTMLFormElement;
 const statusLine = document.getElementById("status-line");
 const nameInput = document.getElementById("display-name") as HTMLInputElement;
@@ -14,7 +21,7 @@ const roomInput = document.getElementById("room-code-input") as HTMLInputElement
 
 nameInput.value = storedName();
 
-init();
+void init();
 
 async function init(): Promise<void> {
   const session = await loadSession();
@@ -31,10 +38,8 @@ form.addEventListener("submit", async (event) => {
 });
 
 // Expose functions for inline onclick handlers.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any, functional/immutable-data
-(window as any).hostRoom = hostRoom;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any, functional/immutable-data
-(window as any).copyLastRoomCode = copyLastRoomCode;
+window.hostRoom = hostRoom;
+window.copyLastRoomCode = copyLastRoomCode;
 
 async function hostRoom(): Promise<void> {
   const name = nameInput.value.trim();

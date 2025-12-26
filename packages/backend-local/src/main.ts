@@ -176,7 +176,7 @@ function resolveFrontendPath(): string | null {
   const candidates = [
     join(current, "../../../frontend/dist"),
     join(current, "../../../frontend"),
-    join(current, "../../../docs/frontend"),
+    join(current, "../../../packages/frontend"),
   ];
 
   for (const candidate of candidates) {

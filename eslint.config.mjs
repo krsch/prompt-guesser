@@ -102,6 +102,30 @@ export default [
     },
   },
 
+  // --- Frontend overrides (browser env, loosen functional rules for DOM) ---
+  {
+    files: ["packages/frontend/**/*.{ts,tsx}"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: { project: "./tsconfig.eslint.json", sourceType: "module" },
+      globals: globals.browser,
+    },
+    rules: {
+      "functional/immutable-data": "off",
+      "functional/prefer-readonly-type": "off",
+      "no-console": "off",
+    },
+  },
+  {
+    files: ["packages/frontend/**/*.js"],
+    languageOptions: {
+      globals: globals.browser,
+    },
+    rules: {
+      "no-console": "off",
+    },
+  },
+
   // --- Disable stylistic conflicts with Prettier ---
   prettierConfig,
 ];

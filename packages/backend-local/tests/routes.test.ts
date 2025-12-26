@@ -1,24 +1,31 @@
+import type { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
 
-import { StateFailureError } from "@prompt-guesser/core/mvcc/errors.js";
 import { ConflictError } from "@prompt-guesser/core/mvcc/errors.js";
+import { StateFailureError } from "@prompt-guesser/core/mvcc/errors.js";
 
 import { createBackendApp } from "../src/app.js";
 import type { GameId, GameService } from "../src/core.js";
+import type { BackendTestContext } from "./support/testContext.js";
 import { createTestContext } from "./support/testContext.js";
+
+function buildApp(testContext: BackendTestContext, port = 9999): Hono {
+  return createBackendApp({
+    port,
+    gameStore: testContext.gameStore,
+    bus: testContext.bus,
+    logger: testContext.logger,
+    defaultConfig: testContext.config,
+    service: testContext.service,
+    scheduler: testContext.scheduler,
+    sessionStore: testContext.sessionStore,
+  });
+}
 
 describe("backend-local HTTP routes", () => {
   it("reports health status", async () => {
     const testContext = createTestContext();
-    const app = createBackendApp({
-      port: 4321,
-      gameStore: testContext.gameStore,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      defaultConfig: testContext.config,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext, 4321);
 
     const response = await app.request("/api/health");
 
@@ -34,16 +41,7 @@ describe("backend-local HTTP routes", () => {
     vi.setSystemTime(now);
 
     const testContext = createTestContext();
-
-    const app = createBackendApp({
-      port: 9999,
-      gameStore: testContext.gameStore,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      defaultConfig: testContext.config,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext);
 
     const response = await app.request(`/api/games/${testContext.gameId}/rounds/start`, {
       method: "POST",
@@ -74,15 +72,7 @@ describe("backend-local HTTP routes", () => {
 
   it("returns 400 for invalid start payloads", async () => {
     const testContext = createTestContext();
-    const app = createBackendApp({
-      port: 9999,
-      gameStore: testContext.gameStore,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      defaultConfig: testContext.config,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext);
 
     const response = await app.request(`/api/games/${testContext.gameId}/rounds/start`, {
       method: "POST",
@@ -97,15 +87,7 @@ describe("backend-local HTTP routes", () => {
 
   it("returns 400 for invalid params schema", async () => {
     const testContext = createTestContext();
-    const app = createBackendApp({
-      port: 9999,
-      gameStore: testContext.gameStore,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      defaultConfig: testContext.config,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext);
 
     const response = await app.request(`/api/games//rounds/start`, {
       method: "POST",
@@ -118,15 +100,7 @@ describe("backend-local HTTP routes", () => {
 
   it("fails to start a round for a missing game", async () => {
     const testContext = createTestContext();
-    const app = createBackendApp({
-      port: 9999,
-      gameStore: testContext.gameStore,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      defaultConfig: testContext.config,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext);
 
     const response = await app.request(`/api/games/missing-game/rounds/start`, {
       method: "POST",
@@ -139,15 +113,7 @@ describe("backend-local HTTP routes", () => {
 
   it("loads a round snapshot", async () => {
     const testContext = createTestContext();
-    const app = createBackendApp({
-      port: 9999,
-      defaultConfig: testContext.config,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      gameStore: testContext.gameStore,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext);
 
     const startResponse = await app.request(
       `/api/games/${testContext.gameId}/rounds/start`,
@@ -175,15 +141,7 @@ describe("backend-local HTTP routes", () => {
 
   it("returns 404 when round is missing", async () => {
     const testContext = createTestContext();
-    const app = createBackendApp({
-      port: 9999,
-      defaultConfig: testContext.config,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      gameStore: testContext.gameStore,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext);
 
     const response = await app.request(
       `/api/games/${testContext.gameId}/rounds/does-not-exist`,
@@ -194,15 +152,7 @@ describe("backend-local HTTP routes", () => {
 
   it("handles OPTIONS preflight", async () => {
     const testContext = createTestContext();
-    const app = createBackendApp({
-      port: 9999,
-      defaultConfig: testContext.config,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      gameStore: testContext.gameStore,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext);
 
     const response = await app.request("/api/games", { method: "OPTIONS" });
     expect(response.status).toBe(200);
@@ -212,15 +162,7 @@ describe("backend-local HTTP routes", () => {
 
   it("returns 413 when payload too large", async () => {
     const testContext = createTestContext();
-    const app = createBackendApp({
-      port: 9999,
-      gameStore: testContext.gameStore,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      defaultConfig: testContext.config,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext);
 
     const bigBody = JSON.stringify({ host: "x".repeat(70 * 1024) });
     const response = await app.request("/api/games", {
@@ -245,15 +187,7 @@ describe("backend-local HTTP routes", () => {
       }),
     } as unknown as GameService;
 
-    const app = createBackendApp({
-      port: 9999,
-      gameStore: testContext.gameStore,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      defaultConfig: testContext.config,
-      service: failingService,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp({ ...testContext, service: failingService }, 9999);
 
     const response = await app.request(
       `/api/games/${testContext.gameId}/rounds/${testContext.gameId}/prompt`,
@@ -277,15 +211,13 @@ describe("backend-local HTTP routes", () => {
       }),
     } as unknown as GameService;
 
-    const app = createBackendApp({
-      port: 9999,
-      gameStore: testContext.gameStore,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      defaultConfig: testContext.config,
-      service: conflictService,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(
+      {
+        ...testContext,
+        service: conflictService,
+      },
+      9999,
+    );
 
     const response = await app.request(
       `/api/games/${testContext.gameId}/rounds/${testContext.gameId}/prompt`,
@@ -303,15 +235,7 @@ describe("backend-local HTTP routes", () => {
 
   it("creates a lobby and returns visible state", async () => {
     const testContext = createTestContext();
-    const app = createBackendApp({
-      port: 9999,
-      gameStore: testContext.gameStore,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      defaultConfig: testContext.config,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext);
 
     const response = await app.request("/api/games", {
       method: "POST",
@@ -333,15 +257,7 @@ describe("backend-local HTTP routes", () => {
 
   it("joins and leaves lobby via dedicated endpoints", async () => {
     const testContext = createTestContext();
-    const app = createBackendApp({
-      port: 9999,
-      gameStore: testContext.gameStore,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      defaultConfig: testContext.config,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext);
 
     const joinRes = await app.request(`/api/games/${testContext.gameId}/lobby/join`, {
       method: "POST",
@@ -364,15 +280,7 @@ describe("backend-local HTTP routes", () => {
 
   it("kicks a player from lobby", async () => {
     const testContext = createTestContext();
-    const app = createBackendApp({
-      port: 9999,
-      gameStore: testContext.gameStore,
-      bus: testContext.bus,
-      logger: testContext.logger,
-      defaultConfig: testContext.config,
-      service: testContext.service,
-      scheduler: testContext.scheduler,
-    });
+    const app = buildApp(testContext);
 
     await app.request(`/api/games/${testContext.gameId}/lobby/join`, {
       method: "POST",

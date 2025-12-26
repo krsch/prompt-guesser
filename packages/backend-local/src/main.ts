@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
+import type { TransformResult } from "esbuild";
 import type { Context } from "hono";
 import type { WSContext } from "hono/ws";
 import { existsSync } from "node:fs";
@@ -22,13 +23,19 @@ import {
   createGameConfig,
 } from "./core.js";
 import { createConsoleLogger } from "./logger.js";
+import { createSessionStore } from "./session.js";
 
 const DEFAULT_PORT = Number(process.env["PORT"] ?? 8787);
+const tsCache = new Map<
+  string,
+  { readonly mtimeMs: number; readonly code: Uint8Array }
+>();
 export async function startServer(): Promise<void> {
   const logger = createConsoleLogger("backend-local");
   const bus = new WebSocketBus(logger);
   const config = createGameConfig();
   const gameStore = new InMemoryGameStore();
+  const sessionStore = createSessionStore();
   const initialGame = {
     id: "game-1" as GameId,
     lobby: {
@@ -71,6 +78,7 @@ export async function startServer(): Promise<void> {
     logger,
     service,
     scheduler,
+    sessionStore,
   });
 
   const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
@@ -99,7 +107,19 @@ export async function startServer(): Promise<void> {
         return c.json({ error: "Not found" }, 404);
       }
 
-      const requestPath = c.req.path === "/" ? "index.html" : c.req.path.slice(1);
+      if (c.req.path === "/") {
+        return c.redirect("/lobby", 302);
+      }
+
+      if (c.req.path.startsWith("/game/")) {
+        const sessionId = readSessionId(c.req.header("cookie"));
+        if (!sessionId || !sessionStore.get(sessionId)) {
+          const redirectUrl = `/login?next=${encodeURIComponent(c.req.path)}`;
+          return c.redirect(redirectUrl, 302);
+        }
+      }
+
+      const requestPath = resolveFrontendRequestPath(c.req.path);
       const resolvedPath = normalize(join(frontendPath, requestPath));
       if (!resolvedPath.startsWith(frontendPath)) {
         return c.json({ error: "Invalid path" }, 400);
@@ -117,10 +137,24 @@ export async function startServer(): Promise<void> {
           headers.set("Content-Type", mimeType);
         }
         const contents = await readFile(resolvedPath);
-        return new Response(new Uint8Array(contents), { headers });
+        return new Response(toArrayBuffer(new Uint8Array(contents)), { headers });
       }
 
-      const fallbackPath = join(frontendPath, "index.html");
+      if (requestPath.endsWith(".js")) {
+        const tsCandidate = resolvedPath.replace(/\.js$/, ".ts");
+        const tsExists = await stat(tsCandidate)
+          .then((info) => info.isFile())
+          .catch(() => false);
+        if (tsExists) {
+          const code = await compileFrontendModule(tsCandidate);
+          const headers = new Headers({
+            "Content-Type": "text/javascript; charset=utf-8",
+          });
+          return new Response(toArrayBuffer(code), { headers });
+        }
+      }
+
+      const fallbackPath = join(frontendPath, "lobby.html");
       if (!existsSync(fallbackPath)) {
         return c.json({ error: "Frontend build not found" }, 404);
       }
@@ -140,17 +174,75 @@ export async function startServer(): Promise<void> {
 function resolveFrontendPath(): string | null {
   const current = fileURLToPath(new URL(".", import.meta.url));
   const candidates = [
-    join(current, "../../frontend/dist"),
-    join(current, "../../frontend"),
-    join(current, "../../docs/frontend"),
+    join(current, "../../../frontend/dist"),
+    join(current, "../../../frontend"),
+    join(current, "../../../docs/frontend"),
   ];
 
   for (const candidate of candidates) {
-    if (existsSync(join(candidate, "index.html"))) {
+    if (
+      existsSync(join(candidate, "lobby.html")) ||
+      existsSync(join(candidate, "index.html"))
+    ) {
       return candidate;
     }
   }
   return null;
+}
+
+function resolveFrontendRequestPath(path: string): string {
+  if (path.startsWith("/lobby.js")) return "lobby.js";
+  if (path.startsWith("/game.js")) return "game.js";
+  if (path.startsWith("/shared.js")) return "shared.js";
+  if (path.startsWith("/styles.css")) return "styles.css";
+  if (path === "/" || path.startsWith("/lobby")) return "lobby.html";
+  if (path.startsWith("/login")) return "login.html";
+  if (path.startsWith("/game/")) return "game.html";
+  return path === "/" ? "lobby.html" : path.slice(1);
+}
+
+function readSessionId(cookieHeader: string | undefined): string | undefined {
+  if (!cookieHeader) return undefined;
+  const parsed = Object.fromEntries(
+    cookieHeader
+      .split(";")
+      .map((pair) => pair.trim().split("=", 2))
+      .filter(([key, value]) => Boolean(key) && Boolean(value))
+      .map(([key = "", value = ""]) => [
+        decodeURIComponent(key),
+        decodeURIComponent(value),
+      ]),
+  );
+  return parsed["pg-session"];
+}
+
+function toArrayBuffer(data: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(data.byteLength);
+  copy.set(data);
+  return copy.buffer;
+}
+
+async function compileFrontendModule(tsPath: string): Promise<Uint8Array> {
+  const { readFile, stat } = await import("node:fs/promises");
+  const info = await stat(tsPath);
+  const cached = tsCache.get(tsPath);
+  if (cached && cached.mtimeMs === info.mtimeMs) {
+    return cached.code;
+  }
+
+  const source = await readFile(tsPath, "utf8");
+  const esbuild = await import("esbuild");
+  const result: TransformResult = await esbuild.transform(source, {
+    loader: "ts",
+    format: "esm",
+    sourcemap: "inline",
+    sourcefile: tsPath,
+    target: "es2022",
+  });
+  const encoded = new TextEncoder().encode(result.code);
+  // eslint-disable-next-line functional/immutable-data
+  tsCache.set(tsPath, { mtimeMs: info.mtimeMs, code: encoded });
+  return encoded;
 }
 
 function getMimeType(path: string): string | undefined {

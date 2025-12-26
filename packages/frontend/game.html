@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prompt Guesser — Game</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-view="game">
+    <header class="top-nav">
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">🎨</div>
+        <div>
+          <div class="brand__name">Prompt Guesser</div>
+          <div class="brand__tagline">Prompt party game for 4–6 players</div>
+        </div>
+      </div>
+      <nav class="nav-links" aria-label="Page navigation">
+        <a href="/login">Change name</a>
+        <a href="/lobby">Lobby</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="ghost" id="copy-room" aria-live="polite" onclick="copyRoom()">
+          Copy room code
+        </button>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="hero" id="room">
+        <div class="hero__copy">
+          <p class="eyebrow">Step 3 of 3</p>
+          <h1>Room <span id="room-code">—</span></h1>
+          <p class="lede" id="status-line" aria-live="polite">Loading game…</p>
+          <div class="alert alert--error" id="error-panel" hidden>
+            <p class="alert__title">We couldn&rsquo;t load this room.</p>
+            <p class="alert__body" id="error-text">Check the room code and try again.</p>
+            <div class="alert__actions">
+              <button class="primary" type="button" id="retry-load">Try again</button>
+              <button class="secondary" type="button" id="back-to-lobby">
+                Back to lobby
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="layout" id="phase">
+        <article class="card phase" data-phase>
+          <header class="card__header">
+            <div>
+              <p class="eyebrow" id="phase-label">Step 1 of 4</p>
+              <h2 id="phase-title">Prompt creation</h2>
+            </div>
+            <div class="phase__timer" role="status" aria-live="polite">
+              <span id="timer-count">0</span>
+              <span class="phase__timer-bar" aria-hidden="true">
+                <span class="phase__timer-fill" id="timer-fill"></span>
+              </span>
+            </div>
+          </header>
+          <p class="lede" id="phase-description">Waiting for the next phase.</p>
+          <div class="phase__content">
+            <div class="phase__image" aria-live="polite" id="phase-image">
+              <div class="image-shell">
+                <div class="image-shell__tag">Waiting</div>
+                <div class="image-shell__placeholder">No image yet.</div>
+              </div>
+            </div>
+            <div class="phase__details" id="phase-details">
+              <h3>Live submissions</h3>
+              <ul class="submissions" id="submissions"></ul>
+            </div>
+          </div>
+        </article>
+        <aside class="card" id="players">
+          <header class="card__header">
+            <div>
+              <p class="eyebrow">Lobby</p>
+              <h2>Players & scores</h2>
+            </div>
+            <span class="badge badge--soft" id="round-label">Round 1</span>
+          </header>
+          <ol class="player-list" id="player-list"></ol>
+          <div class="score-summary" aria-live="polite">
+            <div>
+              <p class="eyebrow">Current leader</p>
+              <p class="score-summary__lead" id="leader">—</p>
+            </div>
+            <div>
+              <p class="eyebrow">Room latency</p>
+              <p class="score-summary__lead" id="latency">0 ms</p>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script type="module" src="/game.js"></script>
+  </body>
+</html>

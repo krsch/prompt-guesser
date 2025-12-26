@@ -14,6 +14,7 @@ import {
   type Logger,
   type Scheduler,
 } from "../../src/core.js";
+import { createSessionStore } from "../../src/session.js";
 
 type Waiter = {
   readonly predicate: (payload: PublishedEvent) => boolean;
@@ -91,6 +92,7 @@ export interface BackendTestContext {
   readonly config: GameConfig;
   readonly logger: Logger;
   readonly gameId: GameId;
+  readonly sessionStore: ReturnType<typeof createSessionStore>;
 }
 
 export function createTestContext(): BackendTestContext {
@@ -103,6 +105,7 @@ export function createTestContext(): BackendTestContext {
   const scheduler = new FakeScheduler();
   const logger = createLoggerMock();
   const gameStore = new InMemoryGameStore();
+  const sessionStore = createSessionStore();
   const gameId = "game-1" as GameId;
   const initialState = {
     id: gameId,
@@ -119,5 +122,5 @@ export function createTestContext(): BackendTestContext {
   });
   void gameStore.createGame(initialState);
 
-  return { gameStore, service, bus, scheduler, config, logger, gameId };
+  return { gameStore, service, bus, scheduler, config, logger, gameId, sessionStore };
 }

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prompt Guesser — Sign in</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-view="login">
+    <header class="top-nav">
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">🎨</div>
+        <div>
+          <div class="brand__name">Prompt Guesser</div>
+          <div class="brand__tagline">Prompt party game for 4–6 players</div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="hero" id="room">
+        <div class="hero__copy">
+          <p class="eyebrow">Step 1 of 3</p>
+          <h1>Choose your display name</h1>
+          <p class="lede">
+            We’ll save it for this device and use it when you host or join a room.
+          </p>
+        </div>
+        <form class="join-card" aria-label="Set name" id="login-form">
+          <label class="field">
+            <span>Display name</span>
+            <input
+              id="display-name"
+              name="display-name"
+              autocomplete="name"
+              inputmode="text"
+              required
+              placeholder="Nova"
+            />
+          </label>
+          <button class="primary full" type="submit">Continue</button>
+          <p class="helper" id="status-line" aria-live="polite">
+            Enter your name to begin.
+          </p>
+        </form>
+      </section>
+    </main>
+
+    <script>
+      const form = document.querySelector("#login-form");
+      const statusLine = document.getElementById("status-line");
+      const nameInput = document.getElementById("display-name");
+      const next = new URL(window.location.href).searchParams.get("next") ?? "/lobby";
+
+      nameInput.value = localStorage.getItem("prompt-guesser:player-name") ?? "";
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const name = nameInput.value.trim();
+        if (!name) {
+          statusLine.textContent = "Please enter your name.";
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ playerName: name }),
+          });
+          if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            const message =
+              body?.error?.message ?? response.statusText ?? "Request failed";
+            throw new Error(message);
+          }
+          localStorage.setItem("prompt-guesser:player-name", name);
+          statusLine.textContent = "Saved! Redirecting…";
+          window.location.href = next;
+        } catch (error) {
+          statusLine.textContent = error.message ?? "Could not save name.";
+        }
+      });
+    </script>
+  </body>
+</html>

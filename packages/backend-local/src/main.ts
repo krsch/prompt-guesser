@@ -1,4 +1,5 @@
 import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { createNodeWebSocket } from "@hono/node-ws";
 import type { Context } from "hono";
 import type { WSContext } from "hono/ws";
@@ -12,6 +13,7 @@ import { OpenAIImageGenerator } from "./adapters/OpenAIImageGenerator.js";
 import { RealScheduler } from "./adapters/RealScheduler.js";
 import { WebSocketBus } from "./adapters/WebSocketBus.js";
 import { createBackendApp } from "./app.js";
+import type { GameId, ImageGenerator, PhaseTimeout } from "./core.js";
 import {
   BroadcastReactor,
   GameService,
@@ -20,8 +22,8 @@ import {
   PhaseSchedulerReactor,
   createGameConfig,
 } from "./core.js";
-import type { GameId, ImageGenerator, PhaseTimeout } from "./core.js";
 import { createConsoleLogger } from "./logger.js";
+import { createSessionStore } from "./session.js";
 
 const DEFAULT_PORT = Number(process.env["PORT"] ?? 8787);
 export async function startServer(): Promise<void> {
@@ -29,6 +31,7 @@ export async function startServer(): Promise<void> {
   const bus = new WebSocketBus(logger);
   const config = createGameConfig();
   const gameStore = new InMemoryGameStore();
+  const sessionStore = createSessionStore();
   const initialGame = {
     id: "game-1" as GameId,
     lobby: {
@@ -71,6 +74,7 @@ export async function startServer(): Promise<void> {
     logger,
     service,
     scheduler,
+    sessionStore,
   });
 
   const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
@@ -94,14 +98,49 @@ export async function startServer(): Promise<void> {
 
   const frontendPath = resolveFrontendPath();
   if (frontendPath) {
-    app.get("/*", async (c: Context): Promise<Response> => {
-      const filePath = join(frontendPath, "index.html");
-      if (!existsSync(filePath)) {
-        return c.json({ error: "Frontend build not found" }, 404);
+    const staticMiddleware = serveStatic({
+      root: frontendPath,
+      rewriteRequestPath: (path: string): string => {
+        const normalized = path.startsWith("/") ? path.slice(1) : path;
+        const isAsset =
+          normalized.endsWith(".js") ||
+          normalized.endsWith(".css") ||
+          normalized.endsWith(".map");
+        if (isAsset) return normalized;
+        if (normalized === "" || normalized.startsWith("lobby")) return "lobby.html";
+        if (normalized.startsWith("login")) return "login.html";
+        if (normalized.startsWith("game/")) return "game.html";
+        return normalized;
+      },
+    });
+
+    app.use("/*", async (c: Context, next): Promise<Response> => {
+      if (c.req.path.startsWith("/api")) {
+        const res = await next();
+        return res ?? c.json({ error: "Not found" }, 404);
       }
 
+      if (c.req.path === "/") {
+        return c.redirect("/lobby", 302);
+      }
+
+      if (c.req.path.startsWith("/game/")) {
+        const sessionId = readSessionId(c.req.header("cookie"));
+        if (!sessionId || !sessionStore.get(sessionId)) {
+          const redirectUrl = `/login?next=${encodeURIComponent(c.req.path)}`;
+          return c.redirect(redirectUrl, 302);
+        }
+      }
+
+      const served = await staticMiddleware(c, async () => undefined);
+      if (served) return served;
+
       const { readFile } = await import("node:fs/promises");
-      const contents = await readFile(filePath, "utf8");
+      const fallbackPath = join(frontendPath, "lobby.html");
+      if (!existsSync(fallbackPath)) {
+        return c.json({ error: "Frontend build not found" }, 404);
+      }
+      const contents = await readFile(fallbackPath, "utf8");
       return c.html(contents);
     });
   }
@@ -115,11 +154,37 @@ export async function startServer(): Promise<void> {
 
 function resolveFrontendPath(): string | null {
   const current = fileURLToPath(new URL(".", import.meta.url));
-  const candidate = join(current, "../../frontend/dist");
-  if (existsSync(candidate)) {
-    return candidate;
+  const candidates = [
+    join(current, "../../../packages/frontend/dist"),
+    join(current, "../../../packages/frontend"),
+    join(current, "../../../frontend/dist"),
+    join(current, "../../../frontend"),
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      existsSync(join(candidate, "lobby.html")) ||
+      existsSync(join(candidate, "index.html"))
+    ) {
+      return candidate;
+    }
   }
   return null;
+}
+
+function readSessionId(cookieHeader: string | undefined): string | undefined {
+  if (!cookieHeader) return undefined;
+  const parsed = Object.fromEntries(
+    cookieHeader
+      .split(";")
+      .map((pair) => pair.trim().split("=", 2))
+      .filter(([key, value]) => Boolean(key) && Boolean(value))
+      .map(([key = "", value = ""]) => [
+        decodeURIComponent(key),
+        decodeURIComponent(value),
+      ]),
+  );
+  return parsed["pg-session"];
 }
 
 void startServer().catch((error) => {

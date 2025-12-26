@@ -28,8 +28,10 @@ import {
   type Scheduler,
   type GameService,
 } from "./core.js";
+import type { Session, SessionStore } from "./session.js";
 
 const MAX_JSON_BYTES = 64 * 1024;
+const SESSION_COOKIE = "pg-session";
 
 export interface EventBus extends MessageBus {
   waitFor(
@@ -46,6 +48,7 @@ export interface CreateBackendAppOptions {
   readonly logger: Logger;
   readonly service: GameService;
   readonly scheduler: Scheduler;
+  readonly sessionStore: SessionStore;
 }
 
 export function createBackendApp({
@@ -56,6 +59,7 @@ export function createBackendApp({
   logger,
   service,
   scheduler,
+  sessionStore,
 }: CreateBackendAppOptions): Hono {
   const app = new Hono();
   const playerSchema = object({
@@ -78,6 +82,9 @@ export function createBackendApp({
   const voteSchema = object({
     playerId: pipe(string(), minLength(1)),
     promptIndex: number(),
+  }) satisfies StandardSchemaV1;
+  const sessionSchema = object({
+    playerName: pipe(string(), minLength(1)),
   }) satisfies StandardSchemaV1;
   const gameParamsSchema = object({
     gameId: pipe(string(), minLength(1)),
@@ -115,11 +122,38 @@ export function createBackendApp({
   );
 
   app.post(
+    "/api/session",
+    sValidator("json", sessionSchema, handleValidationFailure),
+    async (c) => {
+      const { playerName } = c.req.valid("json");
+      const session = sessionStore.create(playerName);
+      const cookie = formatSessionCookie(session.id);
+      return c.newResponse(JSON.stringify(session), {
+        status: 201,
+        headers: {
+          "content-type": "application/json",
+          "Set-Cookie": cookie,
+        },
+      });
+    },
+  );
+
+  app.get("/api/session", (c: Context) => {
+    const session = readSession(c, sessionStore);
+    if (!session) {
+      return c.json(formatError("Session not found", "not_found", getRequestId(c)), 404);
+    }
+    return c.json(session);
+  });
+
+  app.post(
     "/api/games",
     sValidator("json", createGameSchema, handleValidationFailure),
     async (c) => {
       const { host } = c.req.valid("json");
-      const resolvedHost = host ?? "host";
+      const session = host ? sessionStore.create(host) : readSession(c, sessionStore);
+      const resolvedHost = session?.playerName ?? host ?? "host";
+      const cookie = session ? formatSessionCookie(session.id) : undefined;
 
       const gameId = createGameId();
 
@@ -139,6 +173,7 @@ export function createBackendApp({
           headers: {
             "content-type": "application/json",
             Location: `/api/games/${gameId}`,
+            ...(cookie ? { "Set-Cookie": cookie } : {}),
           },
         });
       } catch (error) {
@@ -509,4 +544,32 @@ function respondWithMappedError(
     logger.warn?.("request.error", logMeta);
   }
   return c.json(formatError(error, code, requestId), status);
+}
+
+function readSession(c: Context, store: SessionStore): Session | undefined {
+  const cookieHeader = c.req.header("cookie");
+  if (!cookieHeader) return undefined;
+  const sessionId = parseCookie(cookieHeader)[SESSION_COOKIE];
+  if (!sessionId) return undefined;
+  return store.get(sessionId);
+}
+
+function parseCookie(header: string): Record<string, string> {
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map((pair) => pair.trim().split("=", 2))
+      .filter(([key, value]) => Boolean(key) && Boolean(value))
+      .map(([rawKey, rawValue]) => {
+        const key = rawKey ?? "";
+        const value = rawValue ?? "";
+        return [decodeURIComponent(key), decodeURIComponent(value)];
+      }),
+  );
+}
+
+function formatSessionCookie(sessionId: string): string {
+  return `${SESSION_COOKIE}=${encodeURIComponent(
+    sessionId,
+  )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`;
 }

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prompt Guesser — Lobby</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-view="lobby">
+    <header class="top-nav">
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">🎨</div>
+        <div>
+          <div class="brand__name">Prompt Guesser</div>
+          <div class="brand__tagline">Prompt party game for 4–6 players</div>
+        </div>
+      </div>
+      <nav class="nav-links" aria-label="Page navigation">
+        <a href="/login">Change name</a>
+        <a href="/lobby">Lobby</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="primary" id="nav-host" onclick="hostRoom()">Host room</button>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="hero" id="room">
+        <div class="hero__copy">
+          <p class="eyebrow">Step 2 of 3</p>
+          <h1>Host or join a room</h1>
+          <p class="lede">
+            Use your saved display name. Host a new room for friends, or join an existing
+            one with its code.
+          </p>
+          <div class="cta-row">
+            <button class="primary" id="cta-host" onclick="hostRoom()">
+              Start a fresh room
+            </button>
+            <button class="secondary" id="cta-copy" onclick="copyLastRoomCode()">
+              Copy room code
+            </button>
+          </div>
+        </div>
+        <form class="join-card" aria-label="Join room form" id="join-form">
+          <div class="join-card__header">
+            <div>
+              <p class="eyebrow">Join friends</p>
+              <h2>Enter room code</h2>
+            </div>
+            <span class="badge" aria-live="polite" id="room-code">—</span>
+          </div>
+          <label class="field">
+            <span>Display name</span>
+            <input
+              id="display-name"
+              name="display-name"
+              autocomplete="name"
+              inputmode="text"
+              required
+              placeholder="Nova"
+            />
+          </label>
+          <label class="field">
+            <span>Room code</span>
+            <input
+              id="room-code-input"
+              name="room-code"
+              autocomplete="one-time-code"
+              inputmode="text"
+              required
+              placeholder="game-1234"
+            />
+          </label>
+          <button class="primary full" type="submit">Join room</button>
+          <p class="helper" id="status-line" aria-live="polite">Paste a code to join.</p>
+        </form>
+      </section>
+    </main>
+
+    <script type="module" src="/lobby.js"></script>
+  </body>
+</html>

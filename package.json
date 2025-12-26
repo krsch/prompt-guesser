@@ -11,6 +11,9 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prestart": "pnpm --filter @prompt-guesser/frontend build",
+    "start": "pnpm --filter @prompt-guesser/backend-local start",
+    "dev": "concurrently \"pnpm --filter @prompt-guesser/backend-local dev\" \"pnpm --filter @prompt-guesser/frontend dev\"",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest --watch",
@@ -46,6 +49,7 @@
     "eslint-plugin-import": "^2.32.0",
     "globals": "^16.5.0",
     "prettier": "^3.6.2",
+    "concurrently": "^9.1.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }
